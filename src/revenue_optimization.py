@@ -10,7 +10,7 @@ from gurobipy import GRB
 
 # Import project-specific modules
 import config
-import utils
+import uwtils
 
 # Configure logger
 import logging
