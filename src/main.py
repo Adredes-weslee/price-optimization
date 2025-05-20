@@ -6,10 +6,10 @@ import logging
 
 # Import project-specific modules
 import config # To ensure paths are initialized and accessible
-from scripts import data_preprocessing
-from scripts import customer_segmentation
-from scripts import price_elasticity_modeling
-from scripts import revenue_optimization
+import data_preprocessing
+import customer_segmentation
+import price_elasticity_modeling
+import revenue_optimization
 
 # Configure logger
 # Basic configuration, individual modules might have more specific logging
