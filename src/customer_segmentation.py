@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 def calculate_rfm(df: pd.DataFrame) -> pd.DataFrame:
     """
     Calculates Recency, Frequency, Monetary value, and Total Quantity for each customer.
+    For anonymized data, we use Customer Code as the customer identifier.
     """
     logger.info("Calculating RFM metrics...")
     # Ensure Transaction Date is datetime
@@ -33,29 +34,29 @@ def calculate_rfm(df: pd.DataFrame) -> pd.DataFrame:
         df[config.COL_TRANSACTION_DATE] = pd.to_datetime(df[config.COL_TRANSACTION_DATE], errors='coerce')
 
     # Monetary: Sum of Total Base Amt for each customer
-    monetary_df = df.groupby(config.COL_CUSTOMER_ID, observed=False)[config.COL_TOTAL_BASE_AMT].sum().reset_index()
-    monetary_df.columns = [config.COL_CUSTOMER_ID, 'Monetary']
+    monetary_df = df.groupby(config.COL_CUSTOMER_CODE, observed=False)[config.COL_TOTAL_BASE_AMT].sum().reset_index()
+    monetary_df.columns = [config.COL_CUSTOMER_CODE, 'Monetary']
 
     # Frequency: Count of unique Sales Order No. for each customer
-    frequency_df = df.groupby(config.COL_CUSTOMER_ID, observed=False)[config.COL_SALES_ORDER_NO].nunique().reset_index()
-    frequency_df.columns = [config.COL_CUSTOMER_ID, 'Frequency']
+    frequency_df = df.groupby(config.COL_CUSTOMER_CODE, observed=False)[config.COL_SALES_ORDER_NO].nunique().reset_index()
+    frequency_df.columns = [config.COL_CUSTOMER_CODE, 'Frequency']
 
     # Recency: Days since last transaction
     snapshot_date = df[config.COL_TRANSACTION_DATE].max() + timedelta(days=config.RFM_SNAPSHOT_DAYS_OFFSET)
     logger.info(f"Snapshot date for Recency calculation: {snapshot_date}")
     
-    recency_df = df.groupby(config.COL_CUSTOMER_ID, observed=False)[config.COL_TRANSACTION_DATE].max().reset_index()
+    recency_df = df.groupby(config.COL_CUSTOMER_CODE, observed=False)[config.COL_TRANSACTION_DATE].max().reset_index()
     recency_df['Recency'] = (snapshot_date - recency_df[config.COL_TRANSACTION_DATE]).dt.days
-    recency_df = recency_df[[config.COL_CUSTOMER_ID, 'Recency']]
+    recency_df = recency_df[[config.COL_CUSTOMER_CODE, 'Recency']]
 
     # Total Quantity: Sum of Qty for each customer
-    quantity_df = df.groupby(config.COL_CUSTOMER_ID, observed=False)[config.COL_QTY].sum().reset_index()
-    quantity_df.columns = [config.COL_CUSTOMER_ID, 'Total Quantity']
+    quantity_df = df.groupby(config.COL_CUSTOMER_CODE, observed=False)[config.COL_QTY].sum().reset_index()
+    quantity_df.columns = [config.COL_CUSTOMER_CODE, 'Total Quantity']
     
     # Merge RFM metrics
-    rfm_df = recency_df.merge(frequency_df, on=config.COL_CUSTOMER_ID, how='inner')
-    rfm_df = rfm_df.merge(monetary_df, on=config.COL_CUSTOMER_ID, how='inner')
-    rfm_df = rfm_df.merge(quantity_df, on=config.COL_CUSTOMER_ID, how='inner')
+    rfm_df = recency_df.merge(frequency_df, on=config.COL_CUSTOMER_CODE, how='inner')
+    rfm_df = rfm_df.merge(monetary_df, on=config.COL_CUSTOMER_CODE, how='inner')
+    rfm_df = rfm_df.merge(quantity_df, on=config.COL_CUSTOMER_CODE, how='inner')
     
     logger.info(f"RFM calculation complete. RFM DataFrame shape: {rfm_df.shape}")
     return rfm_df
@@ -137,7 +138,7 @@ def perform_kmeans_clustering(rfm_df: pd.DataFrame) -> pd.DataFrame:
     if a dominant cluster is found.
     """
     logger.info("Performing K-Means clustering...")
-    k_rfm_df = rfm_df[[config.COL_CUSTOMER_ID, 'Recency', 'Frequency', 'Monetary', 'Total Quantity']].copy()
+    k_rfm_df = rfm_df[[config.COL_CUSTOMER_CODE, 'Recency', 'Frequency', 'Monetary', 'Total Quantity']].copy()
     features_for_clustering = ['Recency', 'Frequency', 'Monetary', 'Total Quantity']
 
     # Scale the data - using RobustScaler to handle outliers
@@ -174,10 +175,9 @@ def perform_kmeans_clustering(rfm_df: pd.DataFrame) -> pd.DataFrame:
         # Second K-Means run on just the dominant cluster
         kmeans_run2 = KMeans(n_clusters=config.KMEANS_N_CLUSTERS_RUN2, random_state=config.KMEANS_RANDOM_STATE)
         sub_clusters = kmeans_run2.fit_predict(largest_cluster_data)
-        
         # Add the sub-cluster ID to the original dataframe with an offset to avoid overlap with original IDs
         # e.g. if original clusters are 0,1,2 and largest is 0, new clusters would be 0+3=3, 1+3=4, 2+3=5
-        sub_cluster_with_offset = sub_clusters + config.KMEANS_CLUSTER_ID_OFFSET_RUN1
+        sub_cluster_with_offset = sub_clusters + config.KMEANS_CLUSTER_ID_OFFSET_RUN2
         k_rfm_df.loc[largest_cluster_idx, 'Cluster_ID'] = sub_cluster_with_offset
         
         # Log silhouette score for second clustering
@@ -197,14 +197,12 @@ def perform_kmeans_clustering(rfm_df: pd.DataFrame) -> pd.DataFrame:
     # If we have more clusters from the second run, add more names
     for i in range(3, len(unique_clusters)):
         cluster_names[unique_clusters[i]] = f"Sub-Segment {i-2}"
-    
     k_rfm_df['Cluster_Name'] = k_rfm_df['Cluster_ID'].map(cluster_names)
-    
     logger.info("K-Means clustering complete.")
     
     # Merge clustering results back with the RFM scores and segments
-    result_df = rfm_df.merge(k_rfm_df[[config.COL_CUSTOMER_ID, 'Cluster_ID', 'Cluster_Name']], 
-                           on=config.COL_CUSTOMER_ID, how='inner')
+    result_df = rfm_df.merge(k_rfm_df[[config.COL_CUSTOMER_CODE, 'Cluster_ID', 'Cluster_Name']], 
+                           on=config.COL_CUSTOMER_CODE, how='inner')
     
     return result_df
 
