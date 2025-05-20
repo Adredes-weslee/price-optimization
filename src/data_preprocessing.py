@@ -19,32 +19,17 @@ logger = logging.getLogger(__name__)
 
 def reconcile_customer_info(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Reconciles inconsistencies between Customer Code and Customer Name.
-    Uses a predefined mapping for known inconsistencies.
+    For anonymized data, we skip customer name reconciliation since we're
+    working with customer codes only. This function is kept as a stub
+    to maintain the overall processing pipeline structure.
     """
-    # Mapping from data_preprocessing_original.md (section 4.1.1)
-    consistent_names_map = {
-        'A013': 'AISHAH - TANJONG KATONG PRI SCHOOL / EUNOS PRI SCHOOL',
-        'A030': 'AQUAMARINA HOTEL PTE LTD',
-        'B009': 'BISTRO ONE THIRTYSIX (WHAMPOA) PTE LTD', # Note: Original notebook had one entry as BISTRO ONE THIRTYSIX PTE LTD
-        'C024': 'PLATE & PALETTE - CARRARA CAFE', # Combined from CARRARA CAFE and PLATE & PALETTE
-        'C039': 'CHRISTINE - SOTA / SPRINGDALE PRI SCHOOL',
-        'E016': 'EIGHT PLUS TWO PTE LTD C/O JOE & DOUGH', # Kept the longer name
-        'E017': 'E & W ENTERPRISE PTE LTD C/O JOE & DOUGH', # Kept the longer name
-        'H001': 'HAIPEBRO PTE LTD C/O JOE & DOUGH', # Kept the longer name
-        'J024': 'JEKYLL & HYDE PTE LTD', # Chose one, original also had 1011 PTE LTD
-        'L004': 'LOH S+B PTE LTD C/O JOE & DOUGH', # Kept the longer name
-        'L006': 'LOH BROTHERS COFFEE PTE LTD C/O JOE & DOUGH', # Kept the longer name
-        'L011': 'LIM FOOD F&B PTE LTD', # Chose one, original also had L.B.FOOD
-        'L019': 'LAO SI FROZEN GOOD', # Standardized
-        'M040': 'ZAMEEL ENNYAH - MAS', # Combined
-        'Q002': 'QUESADILLA - REPUBLIC POLY', # Combined
-        'R015': 'RNY CAPITAL PTE LTD C/O JOE & DOUGH' # Kept the longer name
-    }
+    logger.info("Skipping customer name reconciliation for anonymized data.")
     
-    # Apply mapping: if Customer Code is in map, use mapped name, otherwise keep original
-    df[config.COL_CUSTOMER_NAME] = df[config.COL_CUSTOMER_CODE].map(consistent_names_map).fillna(df[config.COL_CUSTOMER_NAME])
-    logger.info("Reconciled Customer Name inconsistencies.")
+    # Remove Customer Name column if it exists to ensure we're not using it
+    if config.COL_CUSTOMER_NAME in df.columns:
+        logger.info(f"Removing '{config.COL_CUSTOMER_NAME}' column from anonymized dataset.")
+        df = df.drop(columns=[config.COL_CUSTOMER_NAME])
+    
     return df
 
 def reconcile_inventory_info(df: pd.DataFrame) -> pd.DataFrame:
@@ -65,10 +50,16 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     """
     Handles missing values in specified columns.
     """
-    # Handle missing Customer Category Desc (section 4.4.1)
-    # Specific case for 'FAIRY WONDERLAND FENG SHAN PRI SCH'
-    df.loc[df[config.COL_CUSTOMER_NAME] == 'FAIRY WONDERLAND FENG SHAN PRI SCH', config.COL_CUSTOMER_CATEGORY_DESC] = 'SCHOOL'
-    logger.info("Handled missing Customer Category Desc for specific customer.")
+    # No need to handle specific customer cases with anonymized data
+    # We'll just ensure categories are filled properly
+    if config.COL_CUSTOMER_CATEGORY_DESC in df.columns:
+        # Fill any missing category with a default value
+        missing_categories = df[config.COL_CUSTOMER_CATEGORY_DESC].isna().sum()
+        if missing_categories > 0:
+            df[config.COL_CUSTOMER_CATEGORY_DESC].fillna('UNKNOWN', inplace=True)
+            logger.info(f"Filled {missing_categories} missing customer categories with 'UNKNOWN'")
+    else:
+        logger.warning(f"Column {config.COL_CUSTOMER_CATEGORY_DESC} not found in dataset")
 
     # Handle missing Inventory Desc for specific Inventory Codes (section 4.4.2)
     # Codes 1146.0 and 1153.0 where Inventory Desc is NaN
@@ -116,16 +107,18 @@ def aggregate_transactions(df: pd.DataFrame) -> pd.DataFrame:
     combinations of transaction identifiers and item details.
     """
     # Define grouping keys. Price per qty is included to keep distinct items if price differs.
-    # Customer Name, Customer Category Desc, Inventory Desc are kept as they should be consistent per code after reconciliation.
+    # For anonymized data, we exclude Customer Name and only use codes and other attributes
     grouping_keys = [
         config.COL_TRANSACTION_DATE,
         config.COL_SALES_ORDER_NO,
         config.COL_CUSTOMER_CODE,
         config.COL_INVENTORY_CODE,
-        config.COL_CUSTOMER_NAME, # Assuming reconciled
-        config.COL_CUSTOMER_CATEGORY_DESC, # Assuming reconciled/filled
-        config.COL_INVENTORY_DESC, # Assuming reconciled/filled
-        config.COL_PRICE_PER_QTY # Calculated and rounded
+        # Only include columns that exist in the dataframe
+        *(col for col in [
+            config.COL_CUSTOMER_CATEGORY_DESC, # Assuming reconciled/filled
+            config.COL_INVENTORY_DESC, # Assuming reconciled/filled
+            config.COL_PRICE_PER_QTY # Calculated and rounded
+        ] if col in df.columns)
     ]
     
     # Ensure all grouping keys exist
@@ -253,19 +246,17 @@ def run_preprocessing():
     # 6. Engineer features
     logger.info("Engineering features...")
     final_df = engineer_features(typed_df)
-    
-    # 7. Save processed data
+      # 7. Save processed data
     if utils.save_df_to_csv(final_df, config.AGGREGATED_DATA_PATH):
         logger.info(f"Successfully saved processed data to {config.AGGREGATED_DATA_PATH}")
     else:
         logger.error(f"Failed to save processed data to {config.AGGREGATED_DATA_PATH}")
     
-    # 8. Create an optional version without customer names if needed
-    # (Some analyses might want to anonymize customer data)
+    # 8. No need to create a version without customer names since we're already using anonymized data
+    # But we'll copy to the NO_CUSTOMER_NAME path as well for compatibility with the rest of the pipeline
     if config.NO_CUSTOMER_NAME_AGG_DATA_PATH is not None:
-        no_name_df = final_df.drop(columns=[config.COL_CUSTOMER_NAME], errors='ignore')
-        if utils.save_df_to_csv(no_name_df, config.NO_CUSTOMER_NAME_AGG_DATA_PATH):
-            logger.info(f"Successfully saved anonymized data to {config.NO_CUSTOMER_NAME_AGG_DATA_PATH}")
+        if utils.save_df_to_csv(final_df, config.NO_CUSTOMER_NAME_AGG_DATA_PATH):
+            logger.info(f"Successfully saved data to {config.NO_CUSTOMER_NAME_AGG_DATA_PATH}")
     
     logger.info("Data preprocessing completed successfully.")
     return final_df

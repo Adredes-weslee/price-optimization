@@ -79,13 +79,13 @@ OPTIMIZATION_PRICE_CHANGE_LOWER_BOUND = -0.50
 OPTIMIZATION_PRICE_CHANGE_UPPER_BOUND = 0.50
 
 # Columns for RFM calculation
-COL_CUSTOMER_ID = 'Customer Code'
 COL_TRANSACTION_DATE = 'Transaction Date'
 COL_SALES_ORDER_NO = 'Sales Order No.'
 COL_TOTAL_BASE_AMT = 'Total Base Amt'
 COL_QTY = 'Qty'
 COL_INVENTORY_CODE = 'Inventory Code'
 COL_INVENTORY_DESC = 'Inventory Desc'
+COL_CUSTOMER_CODE = 'Customer Code'
 COL_CUSTOMER_NAME = 'Customer Name'
 COL_CUSTOMER_CATEGORY_DESC = 'Customer Category Desc'
 COL_PRICE_PER_QTY = 'Price per qty'
