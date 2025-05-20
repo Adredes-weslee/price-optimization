@@ -15,8 +15,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
 # Import project-specific modules
-import config
-import utils
+import .config
+import .utils
 
 # Configure logger
 import logging
