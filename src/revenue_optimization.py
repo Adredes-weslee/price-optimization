@@ -23,84 +23,93 @@ def optimize_prices_for_category(elasticity_df_category: pd.DataFrame, category_
 
     Args:
         elasticity_df_category (pd.DataFrame): DataFrame containing elasticity data,
-            latest prices, and quantities for SKU pairs within a single customer category.
-            Required columns: 'SKU_A', 'SKU_B', 'SKU_A_Desc', 'SKU_B_Desc',
-                              'SKU_A_Latest_Price', 'SKU_A_Latest_Qty',
-                              'SKU_B_Latest_Price', 'SKU_B_Latest_Qty',
-                              'Price_Elasticity_SKU_A', 'Price_Elasticity_SKU_B',
-                              'Cross_Price_Elasticity_A_on_B', 'Item_Category'.
-        category_name (str): Name of the customer category being optimized.
+            latest prices, and quantities for SKU pairs.
+            Required columns: 'SKU_A', 'SKU_A_Desc', 'SKU_A_Latest_Price', 
+                             'SKU_A_Latest_Qty', 'Price_Elasticity_SKU_A'
+        category_name (str): Name of the category being optimized (can be a customer category or 'All Categories').
 
     Returns:
         pd.DataFrame | None: DataFrame with optimization results (original vs. optimized
                               prices, quantities, revenues, and changes), or None if optimization fails.
     """
-    logger.info(f"Starting price optimization for customer category: {category_name}...")
+    logger.info(f"Starting price optimization for category: {category_name}...")
     
-    # Check for required columns
+    # Check for required columns for basic optimization (own-price elasticity)
     required_cols = [
-        'SKU_A', 'SKU_B', 'SKU_A_Desc', 'SKU_B_Desc',
-        'SKU_A_Latest_Price', 'SKU_A_Latest_Qty',
-        'SKU_B_Latest_Price', 'SKU_B_Latest_Qty',
-        'Price_Elasticity_SKU_A', 'Price_Elasticity_SKU_B',
-        'Cross_Price_Elasticity_A_on_B', config.COL_ITEM_CATEGORY
+        'SKU_A', 'SKU_A_Desc', 'SKU_A_Latest_Price', 'SKU_A_Latest_Qty', 'Price_Elasticity_SKU_A'
     ]
     missing_cols = [col for col in required_cols if col not in elasticity_df_category.columns]
     if missing_cols:
         logger.error(f"Missing required columns for optimization: {missing_cols}")
         logger.error(f"Available columns: {elasticity_df_category.columns.tolist()}")
         return None
-        
-    # Handle NaN values in critical columns by dropping rows or imputing
-    # For optimization, rows with NaN elasticities or prices/quantities are problematic
-    critical_numeric_cols = [
-        'SKU_A_Latest_Price', 'SKU_A_Latest_Qty', 'SKU_B_Latest_Price', 'SKU_B_Latest_Qty',
-        'Price_Elasticity_SKU_A', 'Price_Elasticity_SKU_B', 'Cross_Price_Elasticity_A_on_B'
-    ]
-    df_clean = elasticity_df_category.dropna(subset=critical_numeric_cols).copy()
     
-    if df_clean.empty:
-        logger.error(f"No valid data remains after removing NaN values for {category_name}")
+    # Get SKUs with own-price elasticity (these are the ones we'll optimize)
+    own_elasticity_data = elasticity_df_category.dropna(subset=['SKU_A', 'Price_Elasticity_SKU_A', 
+                                                              'SKU_A_Latest_Price', 'SKU_A_Latest_Qty'])
+    
+    # Check if we have any own-price elasticity data
+    if own_elasticity_data.empty:
+        logger.error(f"No valid own-price elasticity data for {category_name}")
         return None
-
+        
+    # For cross-price effects, we'll use what we have (can be empty)
+    # This makes the optimization more flexible if cross-price data is limited
+    df_clean = elasticity_df_category.copy()
+    
+    # Create item category if missing
+    if config.COL_ITEM_CATEGORY not in df_clean.columns:
+        logger.warning(f"{config.COL_ITEM_CATEGORY} column not found, using default category")
+        df_clean[config.COL_ITEM_CATEGORY] = 'Unknown'    
     try:
-        # Get unique SKUs and their attributes
+        # Get unique SKUs and their attributes from own elasticity data
         logger.info("Preparing optimization parameters...")
-        unique_skus = set(df_clean['SKU_A'].unique())
+        
+        # Get unique SKUs that have own-price elasticity
+        unique_skus = set(own_elasticity_data['SKU_A'].unique())
+        logger.info(f"Found {len(unique_skus)} SKUs with valid own-price elasticity data")
         
         # Create a dictionary for easy lookup of SKU attributes
         sku_attrs = {}
-        for _, row in df_clean.drop_duplicates('SKU_A').iterrows():
+        for _, row in own_elasticity_data.drop_duplicates('SKU_A').iterrows():
             sku = row['SKU_A']
             sku_attrs[sku] = {
                 'desc': row['SKU_A_Desc'],
                 'current_price': row['SKU_A_Latest_Price'],
                 'current_qty': row['SKU_A_Latest_Qty'],
                 'own_elasticity': row['Price_Elasticity_SKU_A'],
-                'item_category': row[config.COL_ITEM_CATEGORY]
+                'item_category': row[config.COL_ITEM_CATEGORY] if config.COL_ITEM_CATEGORY in row else 'Unknown'
             }
         
-        # Create a dictionary for cross-price elasticities
+        # Create a dictionary for cross-price elasticities (if available)
         cross_elasticities = {}
-        for _, row in df_clean.iterrows():
-            sku_a = row['SKU_A']
-            sku_b = row['SKU_B']
-            cross_elasticity = row['Cross_Price_Elasticity_A_on_B']
+        
+        # Only process cross elasticities for SKUs that have own-price elasticity
+        if 'SKU_B' in df_clean.columns and 'Cross_Price_Elasticity_A_on_B' in df_clean.columns:
+            cross_elasticity_rows = df_clean.dropna(subset=['SKU_A', 'SKU_B', 'Cross_Price_Elasticity_A_on_B'])
             
-            # Store as (sku_a, sku_b): cross_elasticity
-            cross_elasticities[(sku_a, sku_b)] = cross_elasticity
+            for _, row in cross_elasticity_rows.iterrows():
+                sku_a = row['SKU_A']
+                sku_b = row['SKU_B']
+                
+                # Only include if both SKUs have own-price elasticity (both in our unique_skus list)
+                if sku_a in unique_skus and sku_b in unique_skus:
+                    cross_elasticity = row['Cross_Price_Elasticity_A_on_B']
+                    cross_elasticities[(sku_a, sku_b)] = cross_elasticity
+            
+            logger.info(f"Found {len(cross_elasticities)} valid cross-price elasticity relationships")
         
         # Create a new Gurobi model
         logger.info("Creating Gurobi optimization model...")
         model = gp.Model(f"Price_Optimization_{category_name}")
         
         # Decision variables: price multipliers for each SKU (e.g., 1.1 = 10% price increase)
-        # We'll constrain them to be within reasonable bounds (e.g., ±15%)
+        # We'll constrain them to be within reasonable bounds (e.g., ±20%)
         price_multipliers = {}
         for sku in unique_skus:
             price_multipliers[sku] = model.addVar(
-                lb=0.85,  # Lower bound: 15% price decrease
-                ub=1.15,  # Upper bound: 15% price increase
+                lb=0.80,  # Lower bound: 20% price decrease
+                ub=1.20,  # Upper bound: 20% price increase
                 name=f"price_mult_{sku}"
             )
         
@@ -273,16 +282,11 @@ def run_optimization():
     
     logger.info(f"Loaded elasticity data. Shape: {elasticity_df.shape}")
     
-    # 2. Run optimization for each customer category
+    # 2. Run optimization across all categories together
     results_list = []
     
     # Check if required columns exist
-    required_cols = ['SKU_A', 'SKU_B', 'SKU_A_Desc', 'SKU_B_Desc',
-                   'SKU_A_Latest_Price', 'SKU_B_Latest_Price',
-                   'SKU_A_Latest_Qty', 'SKU_B_Latest_Qty',
-                   'Price_Elasticity_SKU_A', 'Price_Elasticity_SKU_B',
-                   'Cross_Price_Elasticity_A_on_B', config.COL_CUSTOMER_CATEGORY_DESC,
-                   config.COL_ITEM_CATEGORY]
+    required_cols = ['SKU_A', 'SKU_A_Desc', 'SKU_A_Latest_Price', 'SKU_A_Latest_Qty', 'Price_Elasticity_SKU_A']
     
     missing_cols = [col for col in required_cols if col not in elasticity_df.columns]
     
@@ -291,22 +295,64 @@ def run_optimization():
         logger.error("Optimization cannot proceed without these columns.")
         return None
     
-    # Run optimization for each customer category
-    customer_categories = elasticity_df[config.COL_CUSTOMER_CATEGORY_DESC].unique()
+    # Run optimization on all data together
+    logger.info("Optimizing prices across all SKUs...")
     
-    for category in customer_categories:
-        logger.info(f"Optimizing prices for {category}...")
-        category_data = elasticity_df[elasticity_df[config.COL_CUSTOMER_CATEGORY_DESC] == category]
-        
-        category_results = optimize_prices_for_category(category_data, category)
-        if category_results is not None and not category_results.empty:
-            results_list.append(category_results)
-        else:
-            logger.warning(f"No optimization results for {category}")
+    # Get own price elasticity data (where SKU_A has no corresponding SKU_B)
+    own_elasticity_data = elasticity_df[elasticity_df['SKU_B'].isnull()].copy()
     
-    # Combine results from all categories
+    # Filter to remove rows with NaN in critical columns for own elasticity data
+    own_elasticity_data = own_elasticity_data.dropna(subset=['SKU_A', 'Price_Elasticity_SKU_A', 'SKU_A_Latest_Price', 'SKU_A_Latest_Qty'])
+    
+    if own_elasticity_data.empty:
+        logger.error("No valid own-price elasticity data available for optimization")
+        return None
+    
+    # Use a simplified version of Item_Category if available, or create a default one
+    if config.COL_ITEM_CATEGORY not in own_elasticity_data.columns:
+        logger.warning(f"{config.COL_ITEM_CATEGORY} column not found, using default category for all SKUs")
+        own_elasticity_data[config.COL_ITEM_CATEGORY] = 'Unknown'
+    
+    # Get cross-price elasticity data where we have valid data
+    cross_elasticity_data = elasticity_df[
+        ~elasticity_df['SKU_B'].isnull() & 
+        ~elasticity_df['Cross_Price_Elasticity_A_on_B'].isnull()
+    ].copy()
+    
+    # Add customer category column if missing
+    if config.COL_CUSTOMER_CATEGORY_DESC not in own_elasticity_data.columns:
+        own_elasticity_data[config.COL_CUSTOMER_CATEGORY_DESC] = 'All'
+    
+    # Combine the data for optimization
+    optimization_data = own_elasticity_data.copy()
+    optimization_data['SKU_B'] = None  # Placeholder for SKU_B
+    optimization_data['Cross_Price_Elasticity_A_on_B'] = None  # Placeholder
+    
+    # Add cross-elasticity data to the SKU_A data
+    for idx, row in cross_elasticity_data.iterrows():
+        # Only include cross-elasticity data where SKU_A is in our main dataset
+        if row['SKU_A'] in own_elasticity_data['SKU_A'].values:
+            # Insert cross-elasticity data
+            new_row = optimization_data[optimization_data['SKU_A'] == row['SKU_A']].iloc[0].copy()
+            new_row['SKU_B'] = row['SKU_B']
+            new_row['SKU_B_Desc'] = row['SKU_B_Desc']
+            new_row['SKU_B_Latest_Price'] = row['SKU_B_Latest_Price']
+            new_row['SKU_B_Latest_Qty'] = row['SKU_B_Latest_Qty']
+            new_row['Cross_Price_Elasticity_A_on_B'] = row['Cross_Price_Elasticity_A_on_B']
+            
+            optimization_data = pd.concat([optimization_data, pd.DataFrame([new_row])], ignore_index=True)
+    
+    # Run the optimization
+    optimization_results = optimize_prices_for_category(optimization_data, 'All Categories')
+    
+    if optimization_results is not None and not optimization_results.empty:
+        results_list.append(optimization_results)
+    else:
+        logger.warning("No optimization results obtained")
+    
+    # Combine results
     if not results_list:
-        logger.error("No optimization results obtained from any customer category.")
+        logger.error("No optimization results obtained.")
         return None
         
     final_results = pd.concat(results_list, ignore_index=True)
