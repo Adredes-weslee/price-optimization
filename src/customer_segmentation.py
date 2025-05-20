@@ -5,6 +5,7 @@ Corresponds to the logic in 'customer_segmentation_combined_original.md'.
 """
 import pandas as pd
 import numpy as np
+import logging
 from datetime import timedelta
 import matplotlib.pyplot as plt # For visualizations if run directly
 import seaborn as sns # For visualizations if run directly
@@ -12,7 +13,6 @@ import squarify # For treemap visualization
 
 from sklearn.preprocessing import RobustScaler
 from sklearn.cluster import KMeans
-# from yellowbrick.cluster import KElbowVisualizer # Not strictly needed for script, but was in notebook
 from sklearn.metrics import silhouette_score
 
 # Import project-specific modules
@@ -85,7 +85,7 @@ def score_rfm(rfm_df: pd.DataFrame) -> pd.DataFrame:
     except ValueError as e:
         logger.warning(f"Could not create {config.RFM_F_BINS} bins for Frequency due to: {e}. Assigning default score 1.")
         rfm_scored_df['F_Score'] = 1
-
+        
     try:
         rfm_scored_df['M_Score'] = pd.cut(rfm_scored_df['Monetary'], bins=config.RFM_M_BINS, labels=m_labels, duplicates='drop').astype(int)
     except ValueError as e:
@@ -96,25 +96,35 @@ def score_rfm(rfm_df: pd.DataFrame) -> pd.DataFrame:
     
     # Define RFM segments based on score sum (as per notebook logic)
     def assign_rfm_segment(row):
-        score = row['RFM_Score_Sum']
-        if score >= 27: return 'Champions'
-        elif score >= 21: return 'Loyal_Customers'
-        elif score >= 18: return 'Potential_Loyalists'
-        elif score >= 15: return 'New_Customers' # Initial assignment
-        elif score >= 12: return 'At_Risk' # Initial assignment
-        elif score >= 6: return 'Hibernating' # Initial assignment
-        else: return 'Lost'
+        score_sum = row['RFM_Score_Sum']
+        if score_sum >= 24:
+            return 'Champions'
+        elif score_sum >= 18:
+            return 'Loyal Customers'
+        elif score_sum >= 12:
+            return 'Potential Loyalists'
+        elif score_sum >= 9:
+            return 'At Risk Customers'
+        elif score_sum >= 6:
+            return 'Hibernating'
+        else:
+            return 'Lost Customers'
 
     rfm_scored_df['RFM_Segment_Initial'] = rfm_scored_df.apply(assign_rfm_segment, axis=1)
 
     # Adjust segments (as per notebook logic section 4.12)
     def adjust_segment(row):
-        if row['R_Score'] >= 8 and row['F_Score'] <= 3 and row['M_Score'] <= 3:
-            return 'New_Customers'
-        # The notebook logic for 'At Risk' or 'Hibernating' with R_Score >= 8 seems to re-label them as New_Customers
-        elif row['R_Score'] >= 8 and row['RFM_Segment_Initial'] in ['At_Risk', 'Hibernating']:
-             return 'New_Customers'
-        return row['RFM_Segment_Initial']
+        segment = row['RFM_Segment_Initial']
+        # Specific rules to refine segments based on individual R, F, and M scores
+        if row['R_Score'] <= 2 and row['F_Score'] <= 2:
+            return 'Lost Customers'
+        elif row['R_Score'] <= 2 and row['F_Score'] > 2 and row['F_Score'] <= 4:
+            return 'Hibernating'
+        elif row['R_Score'] >= 4 and row['F_Score'] <= 2 and row['M_Score'] <= 3:
+            return 'New Customers'
+        elif row['R_Score'] >= 4 and row['F_Score'] >= 4 and row['M_Score'] >= 8:
+            return 'Champions'
+        return segment
 
     rfm_scored_df['RFM_Segment'] = rfm_scored_df.apply(adjust_segment, axis=1)
     rfm_scored_df.drop(columns=['RFM_Segment_Initial'], inplace=True) # Drop intermediate column
@@ -130,138 +140,108 @@ def perform_kmeans_clustering(rfm_df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Performing K-Means clustering...")
     k_rfm_df = rfm_df[[config.COL_CUSTOMER_ID, 'Recency', 'Frequency', 'Monetary', 'Total Quantity']].copy()
     features_for_clustering = ['Recency', 'Frequency', 'Monetary', 'Total Quantity']
-    
+
+    # Scale the data - using RobustScaler to handle outliers
     scaler = RobustScaler()
-    scaled_data = scaler.fit_transform(k_rfm_df[features_for_clustering])
-    # scaled_df = pd.DataFrame(scaled_data, columns=features_for_clustering, index=k_rfm_df.index)
-
-    # --- K-Means Run 1 ---
-    logger.info("K-Means Run 1: Clustering all customers.")
-    kmeans_run1 = KMeans(n_clusters=config.KMEANS_N_CLUSTERS_RUN1, 
-                         random_state=config.KMEANS_RANDOM_STATE,
-                         n_init='auto') # Suppress future warning
-    k_rfm_df['KMeans_Segment_Run1'] = kmeans_run1.fit_predict(scaled_data)
+    k_rfm_scaled = scaler.fit_transform(k_rfm_df[features_for_clustering])
+    k_rfm_scaled_df = pd.DataFrame(k_rfm_scaled, columns=features_for_clustering)
     
-    # Identify dominant cluster to sub-cluster (e.g., cluster 0 from notebook, which became segment 1)
-    # The notebook logic seems to isolate the largest, less distinct cluster for further segmentation.
-    # Here, we assume cluster 0 (label 0) is the one to be sub-clustered.
-    # The notebook assigned cluster labels then +1. So cluster 0 became segment 1.
-    # Then it isolated segment 1 for further clustering.
+    # First K-Means run
+    logger.info(f"Running K-Means with {config.KMEANS_N_CLUSTERS_RUN1} clusters...")
+    kmeans_run1 = KMeans(n_clusters=config.KMEANS_N_CLUSTERS_RUN1, random_state=config.KMEANS_RANDOM_STATE)
+    k_rfm_df['Cluster_ID'] = kmeans_run1.fit_predict(k_rfm_scaled)
     
-    # In the notebook, cluster labels were 0, 1, 2. Segment 1 (original label 0) was sub-clustered.
-    # Segments 2 and 3 (original labels 1 and 2) were kept aside.
+    # Log silhouette score for first clustering
+    sil_score_run1 = silhouette_score(k_rfm_scaled, k_rfm_df['Cluster_ID'])
+    logger.info(f"First K-Means clustering silhouette score: {sil_score_run1:.4f}")
     
-    # Find the cluster label that corresponds to the largest group, which was '1' after adding 1.
-    # So, original label was 0.
-    # The notebook logic was:
-    # kmeans = KMeans(n_clusters=3, random_state=42).fit(scaled_data)
-    # clusters = kmeans.labels_
-    # k_rfm["KMeans_Segment"] = clusters
-    # k_rfm["KMeans_Segment"] = k_rfm["KMeans_Segment"] + 1
-    # cluster_2_and_3 = k_rfm[k_rfm['KMeans_Segment'].isin([2, 3])]
-    # cluster_1 = k_rfm[~k_rfm['KMeans_Segment'].isin([2, 3])] -> This is the one to re-cluster
+    # Check for dominant cluster
+    cluster_counts = k_rfm_df['Cluster_ID'].value_counts()
+    largest_cluster = cluster_counts.idxmax()
+    largest_cluster_size = cluster_counts[largest_cluster]
+    largest_cluster_pct = largest_cluster_size / k_rfm_df.shape[0] * 100
     
-    # Replicate notebook logic for identifying sub-cluster target
-    temp_segment_col = 'KMeans_Segment_Temp'
-    k_rfm_df[temp_segment_col] = k_rfm_df['KMeans_Segment_Run1'] + 1 # Segments 1, 2, 3
-
-    df_to_recluster = k_rfm_df[~k_rfm_df[temp_segment_col].isin([2,3])].copy() # This is segment 1 (original label 0)
-    df_kept_aside = k_rfm_df[k_rfm_df[temp_segment_col].isin([2,3])].copy()
+    logger.info(f"Largest cluster is {largest_cluster} with {largest_cluster_size} samples ({largest_cluster_pct:.2f}%)")
     
-    k_rfm_df.drop(columns=[temp_segment_col, 'KMeans_Segment_Run1'], inplace=True) # Clean up
-
-    if df_to_recluster.empty:
-        logger.warning("No data to re-cluster after K-Means Run 1. Using Run 1 results directly.")
-        k_rfm_df['KMeans_Segment'] = kmeans_run1.labels_
-    else:
-        logger.info(f"K-Means Run 2: Sub-clustering {len(df_to_recluster)} customers.")
-        scaled_data_run2 = scaler.fit_transform(df_to_recluster[features_for_clustering])
+    # If the largest cluster contains more than 40% of the data, perform a second clustering on just that cluster
+    if largest_cluster_pct > 40:
+        logger.info(f"Dominant cluster found ({largest_cluster_pct:.2f}% of data). Performing second clustering...")
         
-        kmeans_run2 = KMeans(n_clusters=config.KMEANS_N_CLUSTERS_RUN2, 
-                             random_state=config.KMEANS_RANDOM_STATE,
-                             n_init='auto')
-        df_to_recluster['KMeans_Segment'] = kmeans_run2.fit_predict(scaled_data_run2)
-        # Offset these new cluster labels to avoid collision with df_kept_aside
-        df_to_recluster['KMeans_Segment'] += config.KMEANS_CLUSTER_ID_OFFSET_RUN2 
+        # Filter for samples in the largest cluster
+        dominant_cluster_mask = k_rfm_df['Cluster_ID'] == largest_cluster
+        largest_cluster_idx = k_rfm_df.loc[dominant_cluster_mask].index
+        largest_cluster_data = k_rfm_scaled[dominant_cluster_mask]
         
-        # Assign original cluster labels to df_kept_aside
-        # df_kept_aside used KMeans_Segment_Run1 labels directly (0, 1, 2).
-        # The notebook then remapped these. Let's use the original labels from run1 for those kept aside.
-        df_kept_aside['KMeans_Segment'] = df_kept_aside['KMeans_Segment_Run1'] # Original labels 0,1,2
-
-        # Combine
-        final_clustered_df = pd.concat([df_to_recluster, df_kept_aside], axis=0)
-        k_rfm_df = final_clustered_df.copy()
-
-
-    # Remap all KMeans_Segment labels to be sequential starting from 1
-    unique_kmeans_segments = sorted(k_rfm_df['KMeans_Segment'].unique())
-    mapping = {old_val: new_val for new_val, old_val in enumerate(unique_kmeans_segments, start=1)}
-    k_rfm_df['KMeans_Segment'] = k_rfm_df['KMeans_Segment'].map(mapping)
+        # Second K-Means run on just the dominant cluster
+        kmeans_run2 = KMeans(n_clusters=config.KMEANS_N_CLUSTERS_RUN2, random_state=config.KMEANS_RANDOM_STATE)
+        sub_clusters = kmeans_run2.fit_predict(largest_cluster_data)
+        
+        # Add the sub-cluster ID to the original dataframe with an offset to avoid overlap with original IDs
+        # e.g. if original clusters are 0,1,2 and largest is 0, new clusters would be 0+3=3, 1+3=4, 2+3=5
+        sub_cluster_with_offset = sub_clusters + config.KMEANS_CLUSTER_ID_OFFSET_RUN1
+        k_rfm_df.loc[largest_cluster_idx, 'Cluster_ID'] = sub_cluster_with_offset
+        
+        # Log silhouette score for second clustering
+        if len(np.unique(sub_clusters)) > 1:  # Need at least 2 clusters for silhouette score
+            sil_score_run2 = silhouette_score(largest_cluster_data, sub_clusters)
+            logger.info(f"Second K-Means clustering silhouette score: {sil_score_run2:.4f}")
+    
+    # Add meaningful names for the clusters
+    # This is a placeholder approach - consider using centroids or other methods for naming
+    unique_clusters = sorted(k_rfm_df['Cluster_ID'].unique())
+    cluster_names = {
+        unique_clusters[0]: "Low Value",
+        unique_clusters[1]: "Medium Value",
+        unique_clusters[2]: "High Value",
+    }
+    
+    # If we have more clusters from the second run, add more names
+    for i in range(3, len(unique_clusters)):
+        cluster_names[unique_clusters[i]] = f"Sub-Segment {i-2}"
+    
+    k_rfm_df['Cluster_Name'] = k_rfm_df['Cluster_ID'].map(cluster_names)
     
     logger.info("K-Means clustering complete.")
-    return k_rfm_df[[config.COL_CUSTOMER_ID, 'KMeans_Segment']]
-
+    
+    # Merge clustering results back with the RFM scores and segments
+    result_df = rfm_df.merge(k_rfm_df[[config.COL_CUSTOMER_ID, 'Cluster_ID', 'Cluster_Name']], 
+                           on=config.COL_CUSTOMER_ID, how='inner')
+    
+    return result_df
 
 def run_segmentation():
     """
     Main function to run the customer segmentation pipeline.
     """
     logger.info("Starting customer segmentation...")
-
-    # 1. Load Processed Data
+    
+    # 1. Load aggregated data
     aggregated_df = utils.load_csv_data(config.AGGREGATED_DATA_PATH)
     if aggregated_df is None:
-        logger.error("Failed to load aggregated data. Exiting segmentation.")
-        return
-
+        logger.error("Failed to load aggregated data. Segmentation halted.")
+        return None
+    
+    logger.info(f"Loaded aggregated data. Shape: {aggregated_df.shape}")
+    
     # 2. Calculate RFM metrics
-    rfm_calculated_df = calculate_rfm(aggregated_df)
-
-    # 3. Score RFM and assign initial segments
-    rfm_scored_segmented_df = score_rfm(rfm_calculated_df)
+    logger.info("Calculating RFM metrics...")
+    rfm_df = calculate_rfm(aggregated_df)
     
-    # 4. Perform K-Means Clustering
-    # The K-Means in the notebook uses the base RFM values (Recency, Frequency, Monetary, Total Quantity)
-    # not the R, F, M scores.
-    kmeans_segments_df = perform_kmeans_clustering(rfm_calculated_df) # Pass the df before R,F,M scores
-
-    # 5. Merge RFM Segments with K-Means Segments
-    # Merge on Customer Code
-    final_segmentation_df = pd.merge(rfm_scored_segmented_df, kmeans_segments_df, on=config.COL_CUSTOMER_ID, how='left')
-    logger.info(f"RFM and K-Means segments merged. Shape: {final_segmentation_df.shape}")
-
-    # 6. Merge with Customer Category Desc and Item Category for context
-    # Need to get unique Customer Code to Category/Item mapping from aggregated_df
-    cust_item_cat_df = aggregated_df[[
-        config.COL_CUSTOMER_ID, 
-        config.COL_CUSTOMER_CATEGORY_DESC, 
-        config.COL_ITEM_CATEGORY
-    ]].drop_duplicates(subset=[config.COL_CUSTOMER_ID], keep='first').copy()
+    # 3. Score RFM and get initial segments
+    logger.info("Scoring RFM and assigning segments...")
+    rfm_scored_df = score_rfm(rfm_df)
     
-    final_segmentation_df = pd.merge(final_segmentation_df, cust_item_cat_df, on=config.COL_CUSTOMER_ID, how='left')
+    # 4. Perform K-Means clustering for advanced segmentation
+    logger.info("Performing K-Means clustering for advanced segmentation...")
+    final_segmentation_df = perform_kmeans_clustering(rfm_scored_df)
     
-    # Drop RFM_Concat if it exists (it was in the notebook but not essential for final output)
-    if 'RFM_Concat' in final_segmentation_df.columns:
-        final_segmentation_df = final_segmentation_df.drop(columns=['RFM_Concat'])
-        
-    # Select and reorder columns to match notebook output `cust_broad` approx.
-    output_columns = [
-        config.COL_CUSTOMER_ID, 'Recency', 'Frequency', 'Monetary', 'Total Quantity',
-        'R_Score', 'F_Score', 'M_Score', 'RFM_Score_Sum', 'RFM_Segment', 'KMeans_Segment',
-        config.COL_CUSTOMER_CATEGORY_DESC, config.COL_ITEM_CATEGORY
-    ]
-    # Filter for columns that actually exist to prevent KeyErrors
-    output_columns = [col for col in output_columns if col in final_segmentation_df.columns]
-    final_segmentation_df = final_segmentation_df[output_columns]
-
-    # 7. Save Segmentation Data
+    # 5. Save segmentation results
     if utils.save_df_to_csv(final_segmentation_df, config.CUSTOMER_SEGMENTATION_OUTPUT_PATH):
-        logger.info(f"Successfully saved customer segmentation data to {config.CUSTOMER_SEGMENTATION_OUTPUT_PATH}")
+        logger.info(f"Successfully saved customer segmentation results to {config.CUSTOMER_SEGMENTATION_OUTPUT_PATH}")
     else:
-        logger.error(f"Failed to save customer segmentation data.")
-        
-    logger.info("Customer segmentation finished.")
+        logger.error(f"Failed to save customer segmentation results to {config.CUSTOMER_SEGMENTATION_OUTPUT_PATH}")
+    
+    logger.info("Customer segmentation completed successfully.")
     return final_segmentation_df
 
 if __name__ == '__main__':
