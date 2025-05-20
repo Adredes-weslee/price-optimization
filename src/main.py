@@ -8,7 +8,7 @@ import logging
 import config # To ensure paths are initialized and accessible
 import data_preprocessing
 import customer_segmentation
-import price_elasticity_modeling
+import price_elasticity
 import revenue_optimization
 
 # Configure logger
@@ -55,13 +55,13 @@ def run_pipeline():
     except Exception as e:
         logger.error(f"Error during Customer Segmentation: {e}", exc_info=True)
         logger.error("Pipeline halted due to error in segmentation.")
-        return
-
+        return    
+    
     # --- Step 3: Price Elasticity Modeling ---
     logger.info("-" * 50)
     logger.info("STEP 3: Running Price Elasticity Modeling...")
     try:
-        elasticity_df = price_elasticity_modeling.run_elasticity_modeling()
+        elasticity_df = price_elasticity.run_elasticity_modeling()
         if elasticity_df is None or elasticity_df.empty:
             logger.error("Price elasticity modeling failed or returned no data. Pipeline halted.")
             return
@@ -102,15 +102,13 @@ def run_pipeline():
 
 if __name__ == '__main__':
     # This structure assumes that config.py, utils.py and the step-specific
-    # scripts (data_preprocessing.py etc.) are in a subdirectory named 'scripts'
-    # relative to where main.py is.
-    # If main.py is in the root, and scripts are in 'scripts/', then imports would be:
-    # from scripts import config
-    # from scripts import utils
+    # scripts (data_preprocessing.py etc.) are all in the 'src' directory
+    # alongside main.py, so we can use direct imports.
+    #
+    # If you were to move main.py to the project root, you would need to adjust imports:
+    # from src import config
+    # from src import utils
+    # from src import data_preprocessing
     # etc.
-    # The current structure (main.py in scripts/ alongside others) simplifies imports.
-    
-    # If you move main.py to the project root (cs_tay_project/), you'd adjust imports:
-    # from scripts import config, utils, data_preprocessing, ...
     
     run_pipeline()

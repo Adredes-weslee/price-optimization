@@ -4,10 +4,11 @@ Configuration file for the CS Tay Customer Segmentation and Price Optimization p
 Stores file paths, constants, and other configuration parameters.
 """
 import os
+import logging
 from pathlib import Path
 
 # --- Project Root ---
-# Assuming this config.py file is in a 'scripts' subdirectory of the project root
+# Assuming this config.py file is in the 'src' directory of the project root
 PROJECT_ROOT = Path(__file__).parent.parent
 
 # --- Data Paths ---
@@ -25,8 +26,8 @@ OPTIMIZATION_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- File Names ---
 # Input
-# IMPORTANT: User needs to place their original SalesData.csv in the RAW_DATA_DIR
-ORIGINAL_SALES_DATA_FILE = "SalesData.csv" # Original sales data CSV
+# IMPORTANT: User needs to place their original sales_data.csv in the RAW_DATA_DIR
+ORIGINAL_SALES_DATA_FILE = "sales_data.csv" # Original sales data CSV
 
 # Processed
 AGGREGATED_DATA_FILE = "aggregated_df.csv"
@@ -57,13 +58,6 @@ REVENUE_OPTIMIZATION_OUTPUT_PATH = OPTIMIZATION_OUTPUT_DIR / REVENUE_OPTIMIZATIO
 
 # --- Data Loading Parameters ---
 DEFAULT_ENCODING = 'ISO-8859-1' # or 'latin1', 'cp1252' as seen in notebooks
-
-# --- S3 Configuration (Optional - if S3 is used) ---
-# These were seen in the notebooks but might not be needed if data is handled locally.
-# If using S3, uncomment and populate these.
-# S3_BUCKET_NAME = 'bcg-rise-prod-sagemaker-input-data'
-# S3_RAW_DATA_KEY = 'wave-6/SalesData.csv' # Example from data_preprocessing_original.md
-# S3_OUTPUT_PREFIX = 'output-data/wave-6-group-7/' # Example from notebooks
 
 # --- Customer Segmentation Parameters ---
 RFM_SNAPSHOT_DAYS_OFFSET = 1 # Days to add to max transaction date for snapshot
@@ -97,7 +91,6 @@ COL_CUSTOMER_CATEGORY_DESC = 'Customer Category Desc'
 COL_PRICE_PER_QTY = 'Price per qty'
 COL_ITEM_CATEGORY = 'Item Category'
 
-
 # --- Logging Configuration (Example) ---
 LOG_LEVEL = "INFO"
 LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -109,11 +102,9 @@ if __name__ == '__main__':
     print(f"Aggregated Data Path: {AGGREGATED_DATA_PATH}")
     print(f"Customer Segmentation Output Path: {CUSTOMER_SEGMENTATION_OUTPUT_PATH}")
     print(f"Price Elasticities Output Path: {PRICE_ELASTICITIES_OUTPUT_PATH}")
-    print(f"Revenue Optimization Output Path: {REVENUE_OPTIMIZATION_OUTPUT_PATH}")
-
-    # Verify that the raw data file exists if you want to check
-    # if RAW_SALES_DATA_PATH.exists():
-    #     print(f"Raw sales data file found at: {RAW_SALES_DATA_PATH}")
-    # else:
-    #     print(f"⚠️ Raw sales data file NOT FOUND at: {RAW_SALES_DATA_PATH}")
-    #     print("Please ensure 'SalesData.csv' is placed in the 'data/raw/' directory.")
+    print(f"Revenue Optimization Output Path: {REVENUE_OPTIMIZATION_OUTPUT_PATH}")    # Verify that the raw data file exists
+    if RAW_SALES_DATA_PATH.exists():
+        print(f"Raw sales data file found at: {RAW_SALES_DATA_PATH}")
+    else:
+        print(f"⚠️ Raw sales data file NOT FOUND at: {RAW_SALES_DATA_PATH}")
+        print(f"Please ensure '{ORIGINAL_SALES_DATA_FILE}' is placed in the 'data/raw/' directory.")

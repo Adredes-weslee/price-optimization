@@ -82,7 +82,8 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     
     # For rows where Inventory Code is NaN, generate new codes based on 'Price per qty'
     # First, calculate 'Price per qty' if it doesn't exist or has NaNs due to Qty=0
-    # Ensure Qty is not zero to avoid division by zero; fillna for Total Base Amt and Qty if necessary    df[config.COL_QTY] = df[config.COL_QTY].replace(0, np.nan) # Avoid division by zero
+    # Ensure Qty is not zero to avoid division by zero; fillna for Total Base Amt and Qty if necessary    
+    df[config.COL_QTY] = df[config.COL_QTY].replace(0, np.nan) # Avoid division by zero
     df[config.COL_PRICE_PER_QTY] = (df[config.COL_TOTAL_BASE_AMT] / df[config.COL_QTY]).round(2)
     df[config.COL_PRICE_PER_QTY].fillna(0, inplace=True) # Fill NaN prices with 0 or another placeholder
 
@@ -271,10 +272,10 @@ def run_preprocessing():
 
 if __name__ == '__main__':
     # This allows the script to be run directly.
-    # Ensure SalesData.csv is in data/raw/
+    # Ensure sales_data.csv is in data/raw/
     if not config.RAW_SALES_DATA_PATH.exists():
         print(f"ERROR: Raw sales data file not found at {config.RAW_SALES_DATA_PATH}")
-        print("Please place 'SalesData.csv' in the 'data/raw/' directory before running.")
+        print("Please place 'sales_data.csv' in the 'data/raw/' directory before running.")
     else:
         processed_df = run_preprocessing()
         if processed_df is not None:

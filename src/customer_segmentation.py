@@ -9,7 +9,6 @@ import logging
 from datetime import timedelta
 import matplotlib.pyplot as plt # For visualizations if run directly
 import seaborn as sns # For visualizations if run directly
-import squarify # For treemap visualization
 
 from sklearn.preprocessing import RobustScaler
 from sklearn.cluster import KMeans
@@ -256,29 +255,16 @@ if __name__ == '__main__':
             print(segmentation_results_df.head())
             print(f"\nSegmentation data saved to {config.SEGMENTATION_OUTPUT_DIR}")
 
-            # Optional: Display treemap (requires matplotlib and squarify)
-            # if 'RFM_Segment' in segmentation_results_df.columns:
-            #     plt.figure(figsize=(12, 8))
-            #     segment_counts = segmentation_results_df['RFM_Segment'].value_counts()
-            #     squarify.plot(sizes=segment_counts.values, label=segment_counts.index, alpha=0.7,
-            #                   text_kwargs={'fontsize':10})
-            #     plt.axis('off')
-            #     plt.title('Customer Segments Treemap (RFM)')
-            #     # plt.show() # Use plt.savefig() if running in a non-interactive script
-            #     treemap_path = config.SEGMENTATION_OUTPUT_DIR / "rfm_segment_treemap.png"
-            #     plt.savefig(treemap_path)
-            #     logger.info(f"Saved RFM segment treemap to {treemap_path}")
-            #     plt.close()
-
-            # if 'KMeans_Segment' in segmentation_results_df.columns:
-            #     plt.figure(figsize=(10, 7))
-            #     kmeans_counts = segmentation_results_df['KMeans_Segment'].value_counts().sort_index()
-            #     sns.barplot(x=kmeans_counts.index, y=kmeans_counts.values)
-            #     plt.title('K-Means Segment Distribution')
-            #     plt.xlabel('K-Means Segment')
-            #     plt.ylabel('Number of Customers')
-            #     # plt.show()
-            #     kmeans_dist_path = config.SEGMENTATION_OUTPUT_DIR / "kmeans_segment_distribution.png"
-            #     plt.savefig(kmeans_dist_path)
-            #     logger.info(f"Saved K-Means segment distribution to {kmeans_dist_path}")
-            #     plt.close()
+            # Visualization for cluster distribution
+            if 'Cluster_ID' in segmentation_results_df.columns:  # Changed from 'KMeans_Segment' to 'Cluster_ID'
+                plt.figure(figsize=(10, 7))
+                kmeans_counts = segmentation_results_df['Cluster_ID'].value_counts().sort_index()
+                sns.barplot(x=kmeans_counts.index, y=kmeans_counts.values)
+                plt.title('K-Means Cluster Distribution')
+                plt.xlabel('Cluster ID')
+                plt.ylabel('Number of Customers')
+                # plt.show()  # Uncomment if you want to display the plot interactively
+                kmeans_dist_path = config.SEGMENTATION_OUTPUT_DIR / "kmeans_segment_distribution.png"
+                plt.savefig(kmeans_dist_path)
+                logger.info(f"Saved K-Means segment distribution to {kmeans_dist_path}")
+                plt.close()
