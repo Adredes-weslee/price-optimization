@@ -4,9 +4,15 @@ import sys
 import os
 
 # Add the parent directory to path to import from src
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+
+# Add the streamlit directory to path
+streamlit_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(streamlit_dir)
 
 from src import config, utils
+from utils import st_utils
 
 st.set_page_config(
     page_title="CS Tay Price Optimization",
@@ -16,16 +22,7 @@ st.set_page_config(
 )
 
 # Initialize session state
-if "raw_data" not in st.session_state:
-    st.session_state.raw_data = None
-if "processed_data" not in st.session_state:
-    st.session_state.processed_data = None
-if "segmentation_results" not in st.session_state:
-    st.session_state.segmentation_results = None
-if "elasticity_results" not in st.session_state:
-    st.session_state.elasticity_results = None
-if "optimization_results" not in st.session_state:
-    st.session_state.optimization_results = None
+st_utils.initialize_session_state()
 
 st.title("CS Tay Price Optimization Dashboard")
 st.markdown("---")

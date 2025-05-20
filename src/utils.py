@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 
 # Import configuration
-import config
+from . import config
 
 # Configure logger
 logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)

@@ -10,7 +10,9 @@ from copy import deepcopy
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from src import config, revenue_optimization
-from streamlit.utils import visualizations
+# Use relative import for visualizations
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils import visualizations as viz
 
 st.title("Price Strategy Simulator")
 
@@ -142,7 +144,7 @@ if scenario_type == "Price Bounds":
                 st.pyplot(fig)
                 
                 # Display price impact comparison
-                price_fig = visualizations.plot_price_change_impact(scenario_results)
+                price_fig = viz.plot_price_change_impact(scenario_results)
                 if price_fig:
                     st.pyplot(price_fig)
             else:
