@@ -82,12 +82,11 @@ def handle_missing_values(df: pd.DataFrame) -> pd.DataFrame:
     
     # For rows where Inventory Code is NaN, generate new codes based on 'Price per qty'
     # First, calculate 'Price per qty' if it doesn't exist or has NaNs due to Qty=0
-    # Ensure Qty is not zero to avoid division by zero; fillna for Total Base Amt and Qty if necessary
-    df[config.COL_QTY] = df[config.COL_QTY].replace(0, np.nan) # Avoid division by zero
+    # Ensure Qty is not zero to avoid division by zero; fillna for Total Base Amt and Qty if necessary    df[config.COL_QTY] = df[config.COL_QTY].replace(0, np.nan) # Avoid division by zero
     df[config.COL_PRICE_PER_QTY] = (df[config.COL_TOTAL_BASE_AMT] / df[config.COL_QTY]).round(2)
     df[config.COL_PRICE_PER_QTY].fillna(0, inplace=True) # Fill NaN prices with 0 or another placeholder
 
-    rows_with_nan_inv_code = df[config.COL_INVENTORY_CODE].isna()]
+    rows_with_nan_inv_code = df[df[config.COL_INVENTORY_CODE].isna()]
     if not rows_with_nan_inv_code.empty:
         unique_prices_for_nan_inv = rows_with_nan_inv_code[config.COL_PRICE_PER_QTY].unique()
         # Start new codes from 9000, ensure they don't clash with existing codes
@@ -146,150 +145,129 @@ def aggregate_transactions(df: pd.DataFrame) -> pd.DataFrame:
 
 def perform_type_casting(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Converts columns to their appropriate data types.
+    Casts columns to appropriate types.
     """
-    try:
-        df[config.COL_TRANSACTION_DATE] = pd.to_datetime(df[config.COL_TRANSACTION_DATE], format='mixed', dayfirst=True)
-        logger.info(f"Converted '{config.COL_TRANSACTION_DATE}' to datetime.")
-    except Exception as e:
-        logger.error(f"Error converting '{config.COL_TRANSACTION_DATE}' to datetime: {e}. Trying without dayfirst=True.")
-        try:
-            df[config.COL_TRANSACTION_DATE] = pd.to_datetime(df[config.COL_TRANSACTION_DATE], format='mixed')
-            logger.info(f"Successfully converted '{config.COL_TRANSACTION_DATE}' to datetime (without dayfirst=True).")
-        except Exception as e2:
-            logger.error(f"Second attempt to convert '{config.COL_TRANSACTION_DATE}' failed: {e2}")
-
-
-    categorical_cols = [
-        config.COL_CUSTOMER_CODE, config.COL_INVENTORY_CODE,
-        config.COL_CUSTOMER_NAME, config.COL_CUSTOMER_CATEGORY_DESC,
-        config.COL_INVENTORY_DESC
+    # Ensure Transaction Date is datetime
+    if not pd.api.types.is_datetime64_any_dtype(df[config.COL_TRANSACTION_DATE]):
+        df[config.COL_TRANSACTION_DATE] = pd.to_datetime(df[config.COL_TRANSACTION_DATE])
+        logger.info("Cast Transaction Date to datetime format.")
+    
+    # Cast numeric columns to appropriate types
+    numeric_columns = [
+        config.COL_QTY,
+        config.COL_TOTAL_BASE_AMT,
+        config.COL_PRICE_PER_QTY,
+        config.COL_INVENTORY_CODE
     ]
-    for col in categorical_cols:
+    
+    for col in numeric_columns:
         if col in df.columns:
-            df[col] = df[col].astype('category')
-            logger.info(f"Converted '{col}' to category dtype.")
-        else:
-            logger.warning(f"Column '{col}' not found for type casting.")
-            
-    # Ensure Qty is float if it contains non-integers, otherwise int
-    if config.COL_QTY in df.columns:
-        if (df[config.COL_QTY] % 1 == 0).all(): # Check if all are whole numbers
-             df[config.COL_QTY] = df[config.COL_QTY].astype(int)
-             logger.info(f"Converted '{config.COL_QTY}' to int.")
-        else:
-             df[config.COL_QTY] = df[config.COL_QTY].astype(float) # Keep as float if decimals exist
-             logger.info(f"'{config.COL_QTY}' kept as float due to decimal values.")
-
+            # For Inventory Code, use float as it appears to be stored that way in the source data
+            if col == config.COL_INVENTORY_CODE:
+                df[col] = df[col].astype(float)
+            else:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                
+    logger.info("Cast numeric columns to appropriate types.")
     return df
 
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Creates new features like 'Customer Category Broad' and 'Item Category'.
+    Engineers additional features useful for analysis.
     """
-    # Create 'Customer Category Broad' (section 4.6.6)
-    def categorize_customer_broad(desc):
-        if pd.isna(desc): return 'Others'
-        if desc in ['SUPERMARKET', 'MINI MART', 'RETAIL', 'WHOLESALER']:
-            return 'Retail'
-        elif desc in ['CAFE', 'RESTAURANT', 'FOOD MANUFACTURER', 'HAWKER', 'CATERER', 
-                      'ABANG (FATTY BOM BOM)', 'CLOUD KITCHEN (TIFFLAB)', 'FAST FOOD', 
-                      'CLUB/ENTERTAINMENT', 'HOTEL', 'AIRLINE']:
-            return 'Food Services'
-        elif desc == 'SCHOOL':
-            return 'Institutional'
-        elif desc == 'WET MARKET':
-            return 'Market'
-        else:
-            return 'Others'
+    # 1. Extract Year/Month/Day from Transaction Date
+    if pd.api.types.is_datetime64_any_dtype(df[config.COL_TRANSACTION_DATE]):
+        df['Year'] = df[config.COL_TRANSACTION_DATE].dt.year
+        df['Month'] = df[config.COL_TRANSACTION_DATE].dt.month
+        df['Day'] = df[config.COL_TRANSACTION_DATE].dt.day
+        logger.info("Extracted Year, Month, Day from Transaction Date.")
     
-    if config.COL_CUSTOMER_CATEGORY_DESC in df.columns:
-        df['Customer Category Broad'] = df[config.COL_CUSTOMER_CATEGORY_DESC].apply(categorize_customer_broad).astype('category')
-        logger.info("Created 'Customer Category Broad' feature.")
-    else:
-        logger.warning(f"'{config.COL_CUSTOMER_CATEGORY_DESC}' not found, cannot create 'Customer Category Broad'.")
-
-    # Create 'Item Category' (section 4.6.7)
-    def categorize_item(desc):
-        if pd.isna(desc): return "RTC" # Default if NaN
-        desc_str = str(desc) # Ensure it's a string
-        if desc_str.startswith("SP"):
-            return "Raw"
-        elif "BETAGRO" in desc_str: # Case sensitive
-            return "RTE" # Ready-To-Eat
-        else:
-            return "RTC" # Ready-To-Cook
-            
-    if config.COL_INVENTORY_DESC in df.columns:
-        df[config.COL_ITEM_CATEGORY] = df[config.COL_INVENTORY_DESC].apply(categorize_item).astype('category')
-        logger.info("Created 'Item Category' feature.")
-    else:
-        logger.warning(f"'{config.COL_INVENTORY_DESC}' not found, cannot create 'Item Category'.")
+    # 2. Add Customer Category Broad if not already present
+    if 'Customer Category Broad' not in df.columns:
+        # Map from customer category descriptions to broader categories
+        # This is a simplified example - adjust the mapping as needed
+        category_mapping = {
+            'SUPERMARKET': 'Retail',
+            'RETAIL': 'Retail',
+            'SCHOOL': 'Institutional',
+            'F&B': 'Food Service',
+            'RESTAURANT': 'Food Service'
+            # Add more mappings as needed
+        }
         
+        df['Customer Category Broad'] = df[config.COL_CUSTOMER_CATEGORY_DESC].map(category_mapping)
+        # For any unmapped categories, set a default
+        df['Customer Category Broad'].fillna('Other', inplace=True)
+        logger.info("Added Customer Category Broad column.")
+    
+    # 3. Add Item Category if not already present 
+    if config.COL_ITEM_CATEGORY not in df.columns:
+        # Create a basic mapping based on product names
+        # This is a simplified example - adjust the logic as needed
+        def map_item_category(description):
+            desc_lower = str(description).lower()
+            if any(keyword in desc_lower for keyword in ['raw', 'fresh', 'chix', 'chicken']):
+                return 'Raw'
+            elif any(keyword in desc_lower for keyword in ['rtc', 'ready', 'cooked', 'grilled', 'fried']):
+                return 'RTC'  # Ready to Cook
+            else:
+                return 'Other'
+        
+        df[config.COL_ITEM_CATEGORY] = df[config.COL_INVENTORY_DESC].apply(map_item_category)
+        logger.info("Added Item Category column based on Inventory Description.")
+    
     return df
 
 def run_preprocessing():
     """
-    Main function to run the entire data preprocessing pipeline.
+    Main function to run the data preprocessing pipeline.
     """
     logger.info("Starting data preprocessing...")
-
-    # 1. Load Data
-    raw_df = utils.load_csv_data(config.RAW_SALES_DATA_PATH)
-    if raw_df is None:
-        logger.error("Raw data loading failed. Exiting preprocessing.")
-        return
-
-    # Make a copy to avoid SettingWithCopyWarning
-    df = raw_df.copy()
-
-    # 2. Initial 'Price per qty' calculation (needed for imputing Inventory Code)
-    # Handle potential division by zero if Qty can be 0
-    df[config.COL_QTY] = df[config.COL_QTY].replace(0, np.nan)
-    df[config.COL_PRICE_PER_QTY] = (df[config.COL_TOTAL_BASE_AMT] / df[config.COL_QTY]).round(2)
-    # Fill NaNs in Price per qty that resulted from Qty=0 or Qty=NaN.
-    # If Qty was NaN, Total Base Amt might also be NaN or 0.
-    # If Qty was 0, Price per qty becomes inf; fill with 0 or a suitable placeholder.
-    df[config.COL_PRICE_PER_QTY].replace([np.inf, -np.inf], 0, inplace=True) 
-    df[config.COL_PRICE_PER_QTY].fillna(0, inplace=True) # For NaNs from Qty=NaN
-
-    # 3. Reconcile Info & Handle Missing Values
-    df = reconcile_customer_info(df)
-    df = reconcile_inventory_info(df)
-    df = handle_missing_values(df) # This also recalculates Price per qty if needed for new inv codes
-
-    # 4. Aggregate Transactions
-    # Price per qty should be consistent for aggregation, ensure it's up-to-date
-    df[config.COL_QTY] = df[config.COL_QTY].replace(0, np.nan) # Recalculate before aggregation
-    df[config.COL_PRICE_PER_QTY] = (df[config.COL_TOTAL_BASE_AMT] / df[config.COL_QTY]).round(2)
-    df[config.COL_PRICE_PER_QTY].replace([np.inf, -np.inf], 0, inplace=True)
-    df[config.COL_PRICE_PER_QTY].fillna(0, inplace=True)
     
-    df = aggregate_transactions(df)
-
-    # 5. Type Casting
-    df = perform_type_casting(df)
-
-    # 6. Feature Engineering
-    df = engineer_features(df)
+    # 1. Load raw data
+    raw_sales_df = utils.load_csv_data(config.RAW_SALES_DATA_PATH)
+    if raw_sales_df is None:
+        logger.error("Failed to load raw sales data. Preprocessing halted.")
+        return None
     
-    # 7. Save Processed Data
-    if utils.save_df_to_csv(df, config.AGGREGATED_DATA_PATH):
-        logger.info(f"Successfully saved aggregated data to {config.AGGREGATED_DATA_PATH}")
+    logger.info(f"Loaded raw sales data. Shape: {raw_sales_df.shape}")
+    
+    # 2. Reconcile data inconsistencies
+    logger.info("Reconciling data inconsistencies...")
+    reconciled_df = reconcile_customer_info(raw_sales_df)
+    reconciled_df = reconcile_inventory_info(reconciled_df)
+    
+    # 3. Handle missing values
+    logger.info("Handling missing values...")
+    filled_df = handle_missing_values(reconciled_df)
+    
+    # 4. Aggregate transactions
+    logger.info("Aggregating transactions...")
+    aggregated_df = aggregate_transactions(filled_df)
+    
+    # 5. Perform type casting
+    logger.info("Performing type casting...")
+    typed_df = perform_type_casting(aggregated_df)
+    
+    # 6. Engineer features
+    logger.info("Engineering features...")
+    final_df = engineer_features(typed_df)
+    
+    # 7. Save processed data
+    if utils.save_df_to_csv(final_df, config.AGGREGATED_DATA_PATH):
+        logger.info(f"Successfully saved processed data to {config.AGGREGATED_DATA_PATH}")
     else:
-        logger.error(f"Failed to save aggregated data to {config.AGGREGATED_DATA_PATH}")
-
-    # Optional: Save a version without customer name
-    if config.COL_CUSTOMER_NAME in df.columns:
-        no_customer_name_df = df.drop(columns=[config.COL_CUSTOMER_NAME])
-        if utils.save_df_to_csv(no_customer_name_df, config.NO_CUSTOMER_NAME_AGG_DATA_PATH):
-            logger.info(f"Successfully saved data without customer name to {config.NO_CUSTOMER_NAME_AGG_DATA_PATH}")
-        else:
-            logger.error(f"Failed to save data without customer name to {config.NO_CUSTOMER_NAME_AGG_DATA_PATH}")
-
-    logger.info("Data preprocessing finished.")
-    return df
-
+        logger.error(f"Failed to save processed data to {config.AGGREGATED_DATA_PATH}")
+    
+    # 8. Create an optional version without customer names if needed
+    # (Some analyses might want to anonymize customer data)
+    if config.NO_CUSTOMER_NAME_AGG_DATA_PATH is not None:
+        no_name_df = final_df.drop(columns=[config.COL_CUSTOMER_NAME], errors='ignore')
+        if utils.save_df_to_csv(no_name_df, config.NO_CUSTOMER_NAME_AGG_DATA_PATH):
+            logger.info(f"Successfully saved anonymized data to {config.NO_CUSTOMER_NAME_AGG_DATA_PATH}")
+    
+    logger.info("Data preprocessing completed successfully.")
+    return final_df
 
 if __name__ == '__main__':
     # This allows the script to be run directly.
