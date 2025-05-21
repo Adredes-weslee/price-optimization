@@ -10,8 +10,8 @@ import logging
 from pathlib import Path
 
 # Import project-specific modules
-import config
-import utils
+from . import config
+from . import utils
 
 # Configure logger
 logging.basicConfig(level=config.LOG_LEVEL, format=config.LOG_FORMAT)
