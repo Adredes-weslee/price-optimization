@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+from pathlib import Path
 
 # Add the parent directory to path to import from src
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -14,6 +15,53 @@ sys.path.append(streamlit_dir)
 from src import config, utils
 from utils import st_utils
 
+# Function to load sample data if available
+def load_sample_data():
+    # Load raw data
+    raw_data_path = Path(parent_dir) / "data" / "raw" / "sales_data.csv"
+    if raw_data_path.exists() and st.session_state.raw_data is None:
+        try:
+            df = pd.read_csv(raw_data_path)
+            st.session_state.raw_data = df
+        except Exception as e:
+            st.error(f"Error loading raw sample data: {e}")
+    
+    # Load processed data
+    processed_data_path = Path(parent_dir) / "data" / "processed" / "aggregated_df.csv"
+    if processed_data_path.exists() and st.session_state.processed_data is None:
+        try:
+            df = pd.read_csv(processed_data_path)
+            st.session_state.processed_data = df
+        except Exception as e:
+            st.error(f"Error loading processed sample data: {e}")
+    
+    # Load segmentation results
+    segmentation_path = Path(parent_dir) / "data" / "segmentation" / "customer_segmentation_df.csv"
+    if segmentation_path.exists() and st.session_state.segmentation_results is None:
+        try:
+            df = pd.read_csv(segmentation_path)
+            st.session_state.segmentation_results = df
+        except Exception as e:
+            st.error(f"Error loading segmentation results: {e}")
+    
+    # Load elasticity results
+    elasticity_path = Path(parent_dir) / "data" / "optimization" / "price_elasticities_df.csv"
+    if elasticity_path.exists() and st.session_state.elasticity_results is None:
+        try:
+            df = pd.read_csv(elasticity_path)
+            st.session_state.elasticity_results = df
+        except Exception as e:
+            st.error(f"Error loading elasticity results: {e}")
+    
+    # Load optimization results
+    optimization_path = Path(parent_dir) / "data" / "optimization" / "revenue_optimization_results.csv"
+    if optimization_path.exists() and st.session_state.optimization_results is None:
+        try:
+            df = pd.read_csv(optimization_path)
+            st.session_state.optimization_results = df
+        except Exception as e:
+            st.error(f"Error loading optimization results: {e}")
+
 st.set_page_config(
     page_title="CS Tay Price Optimization",
     page_icon="💰",
@@ -21,8 +69,46 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Custom CSS to override sidebar text formatting
+st.markdown("""
+    <style>
+    /* Make sidebar navigation links uppercase */
+    .css-1oe6wy4 {
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+    .css-pkbazv {
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+    /* Make active navigation item bold and uppercase */
+    .css-17lntkn {
+        text-transform: uppercase;
+        font-weight: 800;
+    }
+    /* Add a footer box */
+    .footer {
+        background-color: #F0F2F6;
+        padding: 10px;
+        border-radius: 5px;
+        margin-top: 20px;
+        text-align: center;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Add this at the end of your app.py file
+st.sidebar.markdown("""
+<div class="footer">
+Created with ❤️ using Streamlit
+</div>
+""", unsafe_allow_html=True)
+
 # Initialize session state
 st_utils.initialize_session_state()
+
+# Load sample data if raw_data is not already loaded
+load_sample_data()
 
 st.title("CS Tay Price Optimization Dashboard")
 st.markdown("---")
