@@ -40,35 +40,37 @@ if st.button("Calculate Price Elasticities"):
     config.PRICE_ELASTICITY_TOP_N_SKUS = top_n_skus
     
     try:
-        # Prepare data for elasticity
-        elasticity_data_dict = {}
-        for category in selected_categories:
-            prepared_data = price_elasticity.prepare_data_for_elasticity(
-                st.session_state.processed_data, 
-                category
-            )
-            elasticity_data_dict[category] = prepared_data
+        # Step 1: Get top SKUs for ALL selected categories together
+        top_skus_df = price_elasticity.get_top_skus(
+            st.session_state.processed_data,
+            customer_categories=selected_categories,
+            top_n=top_n_skus
+        )
         
-        # Calculate own-price elasticities
-        own_price_elasticities = {}
-        for category, data in elasticity_data_dict.items():
-            category_elasticities = price_elasticity.calculate_own_price_elasticities(data, min_data_points)
-            own_price_elasticities[category] = category_elasticities
+        # Step 2: Prepare data for elasticity using the complete dataset
+        data_for_elasticity = price_elasticity.prepare_data_for_elasticity(
+            st.session_state.processed_data, 
+            top_skus_df
+        )
         
-        # Calculate cross-price elasticities
-        cross_price_elasticities = {}
-        for category, data in elasticity_data_dict.items():
-            category_cross_elasticities = price_elasticity.calculate_cross_price_elasticities(
-                data, 
-                own_price_elasticities[category],
-                min_data_points
-            )
-            cross_price_elasticities[category] = category_cross_elasticities
+        # Step 3: Calculate own-price elasticities for the prepared data
+        own_elasticities_df = price_elasticity.calculate_own_price_elasticity(data_for_elasticity)
         
-        # Combine elasticities
+        # Step 4: Calculate cross-price elasticities
+        cross_elasticities_df = price_elasticity.calculate_cross_price_elasticity(data_for_elasticity)
+        
+        # Step 5: Get latest transactions for SKUs in elasticity analysis
+        all_skus = set(top_skus_df[config.COL_INVENTORY_CODE].unique())
+        latest_transactions_df = price_elasticity.get_latest_transactions(
+            st.session_state.processed_data, 
+            list(all_skus)
+        )
+        
+        # Step 6: Combine all elasticity results
         combined_elasticities = price_elasticity.combine_and_categorize_elasticities(
-            own_price_elasticities, 
-            cross_price_elasticities
+            own_elasticities_df,
+            cross_elasticities_df,
+            latest_transactions_df
         )
         
         # Store results in session state
@@ -94,5 +96,25 @@ if st.button("Calculate Price Elasticities"):
         plt.tight_layout()
         st.pyplot(fig)
         
+
+        # Show cross-price elasticity results
+        st.subheader("Cross-Price Elasticity Results")
+                
+        cross_elasticity_df = combined_elasticities[combined_elasticities['SKU_B'].notnull()]
+        if not cross_elasticity_df.empty:
+            st.dataframe(cross_elasticity_df)
+            
+            # Visualization for cross-price elasticities
+            st.subheader("Cross-Price Elasticity Distribution")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            sns.histplot(cross_elasticity_df['Cross_Price_Elasticity_A_on_B'], kde=True, ax=ax)
+            plt.axvline(x=0, color='blue', linestyle='--')
+            plt.title("Distribution of Cross-Price Elasticities")
+            plt.xlabel("Elasticity Value")
+            plt.tight_layout()
+            st.pyplot(fig)
+        else:
+            st.info("No significant cross-price elasticities found.")
+            
     except Exception as e:
         st.error(f"Error during elasticity analysis: {e}")
