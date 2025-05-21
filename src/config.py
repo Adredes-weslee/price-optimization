@@ -71,12 +71,12 @@ KMEANS_CLUSTER_ID_OFFSET_RUN2 = 4 # To ensure unique cluster IDs after combining
 
 # --- Price Elasticity Parameters ---
 PRICE_ELASTICITY_CUSTOMER_CATEGORIES = ['SUPERMARKET', 'RETAIL']
-PRICE_ELASTICITY_TOP_N_SKUS = 10
+PRICE_ELASTICITY_TOP_N_SKUS = 15
 
 # --- Revenue Optimization Parameters ---
 # Bounds for price change percentages (e.g., -50% to +50%)
 OPTIMIZATION_PRICE_CHANGE_LOWER_BOUND = -0.50
-OPTIMIZATION_PRICE_CHANGE_UPPER_BOUND = 0.50
+OPTIMIZATION_PRICE_CHANGE_UPPER_BOUND = 2.00
 
 # Columns for RFM calculation
 COL_TRANSACTION_DATE = 'Transaction Date'

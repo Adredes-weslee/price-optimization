@@ -5,11 +5,11 @@ Main script to run the entire CS Tay Customer Segmentation and Price Optimizatio
 import logging
 
 # Import project-specific modules
-import config # To ensure paths are initialized and accessible
-import data_preprocessing
-import customer_segmentation
-import price_elasticity
-import revenue_optimization
+from . import config
+from . import data_preprocessing
+from . import customer_segmentation
+from . import price_elasticity
+from . import revenue_optimization
 
 # Configure logger
 # Basic configuration, individual modules might have more specific logging
