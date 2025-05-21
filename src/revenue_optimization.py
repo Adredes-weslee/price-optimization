@@ -9,8 +9,8 @@ import gurobipy as gp
 from gurobipy import GRB
 
 # Import project-specific modules
-import config
-import uwtils
+from . import config
+from . import utils
 
 # Configure logger
 import logging
@@ -103,13 +103,19 @@ def optimize_prices_for_category(elasticity_df_category: pd.DataFrame, category_
         logger.info("Creating Gurobi optimization model...")
         model = gp.Model(f"Price_Optimization_{category_name}")
         
-        # Decision variables: price multipliers for each SKU (e.g., 1.1 = 10% price increase)
-        # We'll constrain them to be within reasonable bounds (e.g., ±20%)
+        # Decision variables: price multipliers for each SKU
         price_multipliers = {}
         for sku in unique_skus:
+            # Use config parameters instead of hardcoded values
+            lower_bound = 1 + config.OPTIMIZATION_PRICE_CHANGE_LOWER_BOUND
+            upper_bound = 1 + config.OPTIMIZATION_PRICE_CHANGE_UPPER_BOUND
+            
+            # Log the bounds being used
+            logger.info(f"Setting price bounds for SKU {sku}: [{lower_bound:.2f}, {upper_bound:.2f}]")
+            
             price_multipliers[sku] = model.addVar(
-                lb=0.80,  # Lower bound: 20% price decrease
-                ub=1.20,  # Upper bound: 20% price increase
+                lb=lower_bound,
+                ub=upper_bound,
                 name=f"price_mult_{sku}"
             )
         
