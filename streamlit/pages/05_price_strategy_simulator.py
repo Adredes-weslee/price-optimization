@@ -6,13 +6,26 @@ import sys
 import os
 from copy import deepcopy
 
-# Add the parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+def setup_paths():
+    """Add necessary directories to Python path for imports"""
+    import sys
+    import os
+    
+    # Add project root (for src imports)
+    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if root_dir not in sys.path:
+        sys.path.append(root_dir)
+
+    
+    # Add streamlit directory (for utils imports)
+    streamlit_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if streamlit_dir not in sys.path:
+        sys.path.append(streamlit_dir)
+
+setup_paths()
 
 from src import config, revenue_optimization
-# Use relative import for visualizations
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils import visualizations as viz
+from utils import visualizations as viz 
 
 st.title("Price Strategy Simulator")
 
@@ -66,7 +79,7 @@ if scenario_type == "Price Bounds":
         upper_bound = st.slider(
             "Upper Price Bound (%)", 
             min_value=0, 
-            max_value=50, 
+            max_value=200, 
             value=int(config.OPTIMIZATION_PRICE_CHANGE_UPPER_BOUND * 100)
         )
         upper_bound = upper_bound / 100
@@ -144,6 +157,7 @@ if scenario_type == "Price Bounds":
                 st.pyplot(fig)
                 
                 # Display price impact comparison
+                scenario_results['Description'] = scenario_results['Description'].fillna('Unknown').astype(str)
                 price_fig = viz.plot_price_change_impact(scenario_results)
                 if price_fig:
                     st.pyplot(price_fig)
@@ -155,12 +169,56 @@ elif scenario_type == "Product Selection":
     
     # Get unique products from elasticity data
     elasticity_df = st.session_state.elasticity_results
-    own_elasticity = elasticity_df[elasticity_df['SKU_B'].isna()]
-    
-    # Get list of products with their categories
-    products = own_elasticity[['SKU_A', 'SKU_A_Desc', config.COL_ITEM_CATEGORY]].drop_duplicates()
-    products = products.rename(columns={'SKU_A': 'SKU', 'SKU_A_Desc': 'Description'})
-    
+    st.info(f"DEBUG: Columns in elasticity data: {elasticity_df.columns.tolist()}")
+
+    # Create products dataframe with more flexible column mapping
+    products = pd.DataFrame()
+
+    # Check if we're working with already-processed data
+    if 'SKU' in elasticity_df.columns:
+        # We're working with already processed data (likely from optimization results)
+        products['SKU'] = elasticity_df['SKU']
+        if 'Description' in elasticity_df.columns:
+            products['Description'] = elasticity_df['Description']
+        else:
+            products['Description'] = "Product " + elasticity_df['SKU'].astype(str)
+        
+        if config.COL_ITEM_CATEGORY in elasticity_df.columns:
+            products[config.COL_ITEM_CATEGORY] = elasticity_df[config.COL_ITEM_CATEGORY]
+        elif 'Item_Category' in elasticity_df.columns:
+            products[config.COL_ITEM_CATEGORY] = elasticity_df['Item_Category']
+        else:
+            products[config.COL_ITEM_CATEGORY] = "Unknown"
+            
+    # Check if we have the raw elasticity data format
+    elif 'SKU_A' in elasticity_df.columns:
+        products['SKU'] = elasticity_df['SKU_A']
+        
+        if 'SKU_A_Desc' in elasticity_df.columns:
+            products['Description'] = elasticity_df['SKU_A_Desc']
+        elif 'Inventory Desc' in elasticity_df.columns:
+            products['Description'] = elasticity_df['Inventory Desc']
+        else:
+            products['Description'] = "Product " + elasticity_df['SKU_A'].astype(str)
+            
+        if 'Item Category' in elasticity_df.columns:
+            products[config.COL_ITEM_CATEGORY] = elasticity_df['Item Category']
+        else:
+            products[config.COL_ITEM_CATEGORY] = "Unknown"
+    else:
+        st.error("No product identifier columns found in data")
+        products = pd.DataFrame({
+            'SKU': ["Unknown"],
+            'Description': ["Unknown"],
+            config.COL_ITEM_CATEGORY: ["Unknown"]
+        })
+
+    # Remove duplicates
+    products = products.drop_duplicates()
+
+    # Make sure Description is a string to avoid len() errors later
+    products['Description'] = products['Description'].fillna('Unknown').astype(str)
+        
     # Group products by category
     categories = products[config.COL_ITEM_CATEGORY].unique()
     
