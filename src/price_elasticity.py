@@ -9,8 +9,8 @@ import statsmodels.api as sm # For OLS regression
 from itertools import combinations # For SKU pairs in cross-price elasticity
 
 # Import project-specific modules
-import config
-import utils
+from . import config
+from . import utils
 
 # Configure logger
 import logging
@@ -130,7 +130,7 @@ def calculate_own_price_elasticity(data_for_elasticity: pd.DataFrame) -> pd.Data
                 
                 # Ensure no NaN/inf in X_sku or y_sku
                 X_sku.replace([np.inf, -np.inf], np.nan, inplace=True)
-                sku_data['log_qty'].replace([np.inf, -np.inf], np.nan, inplace=True)
+                sku_data['log_qty'] = sku_data['log_qty'].replace([np.inf, -np.inf], np.nan)
                 valid_indices = X_sku.dropna().index.intersection(sku_data['log_qty'].dropna().index)
 
                 if len(valid_indices) > X_sku.shape[1]: # Check if enough valid data points remain
