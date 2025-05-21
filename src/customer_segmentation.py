@@ -15,8 +15,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 
 # Import project-specific modules
-import .config
-import .utils
+from . import config
+from . import utils
 
 # Configure logger
 import logging
@@ -185,14 +185,11 @@ def perform_kmeans_clustering(rfm_df: pd.DataFrame) -> pd.DataFrame:
             sil_score_run2 = silhouette_score(largest_cluster_data, sub_clusters)
             logger.info(f"Second K-Means clustering silhouette score: {sil_score_run2:.4f}")
     
-    # Add meaningful names for the clusters
-    # This is a placeholder approach - consider using centroids or other methods for naming
+    # Replace the custom names with generic numbered labels
     unique_clusters = sorted(k_rfm_df['Cluster_ID'].unique())
-    cluster_names = {
-        unique_clusters[0]: "Low Value",
-        unique_clusters[1]: "Medium Value",
-        unique_clusters[2]: "High Value",
-    }
+    cluster_names = {}
+    for i, cluster_id in enumerate(unique_clusters):
+        cluster_names[cluster_id] = f"Segment {i+1}"
     
     # If we have more clusters from the second run, add more names
     for i in range(3, len(unique_clusters)):
