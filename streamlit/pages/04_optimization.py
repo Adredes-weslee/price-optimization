@@ -25,7 +25,7 @@ with col1:
     lower_bound = st.slider("Lower Price Bound (%)", min_value=-50, max_value=0, value=-20)
     lower_bound = lower_bound / 100 + 1  # Convert -20% to 0.8
 with col2:
-    upper_bound = st.slider("Upper Price Bound (%)", min_value=0, max_value=50, value=20)
+    upper_bound = st.slider("Upper Price Bound (%)", min_value=0, max_value=200, value=20)
     upper_bound = upper_bound / 100 + 1  # Convert 20% to 1.2
 
 # Run optimization
@@ -39,6 +39,14 @@ if st.button("Optimize Prices"):
             config.OPTIMIZATION_PRICE_CHANGE_LOWER_BOUND = lower_bound - 1  # Convert back to percentage change
             config.OPTIMIZATION_PRICE_CHANGE_UPPER_BOUND = upper_bound - 1  # Convert back to percentage change
             
+            # Display the actual bounds being used
+            st.info(f"Optimization running with price bounds: [{lower_bound-1:.2f}, {upper_bound-1:.2f}]")
+
+            # Clear cached results
+            if os.path.exists(config.REVENUE_OPTIMIZATION_OUTPUT_PATH):
+                os.remove(config.REVENUE_OPTIMIZATION_OUTPUT_PATH)
+                st.success("Cleared previous optimization results")
+                
             # Run optimization
             optimization_results = revenue_optimization.run_optimization()
             
@@ -65,24 +73,52 @@ if st.button("Optimize Prices"):
                 st.subheader("Optimization Results by SKU")
                 st.dataframe(optimization_results.sort_values('Revenue_Change_Pct', ascending=False))
                 
-                # Visualizations
+                # Show elasticity results
                 st.subheader("Revenue Change by SKU")
-                
-                # If too many SKUs, only show the top and bottom 10
-                sorted_results = optimization_results.sort_values('Revenue_Change_Pct', ascending=False)
-                if len(sorted_results) > 20:
-                    top_results = sorted_results.head(10)
-                    bottom_results = sorted_results.tail(10)
-                    plot_results = pd.concat([top_results, bottom_results])
-                else:
-                    plot_results = sorted_results
-                
-                fig, ax = plt.subplots(figsize=(12, 8))
-                sns.barplot(x='Description', y='Revenue_Change_Pct', data=plot_results, ax=ax)
-                plt.xticks(rotation=90)
-                plt.title("Revenue Change by SKU (%)")
-                plt.tight_layout()
-                st.pyplot(fig)
+
+                try:
+                    # First check if we have valid data
+                    if optimization_results is None or optimization_results.empty:
+                        st.warning("No optimization results to display.")
+                    else:
+                        # Debug info
+                        st.info(f"Data columns: {', '.join(optimization_results.columns.tolist())}")
+                        
+                        # Sort results
+                        sorted_results = optimization_results.sort_values('Revenue_Change_Pct', ascending=False)
+                        
+                        # Limit to top/bottom results if needed
+                        if len(sorted_results) > 20:
+                            top_results = sorted_results.head(10)
+                            bottom_results = sorted_results.tail(10)
+                            plot_results = pd.concat([top_results, bottom_results])
+                        else:
+                            plot_results = sorted_results
+
+                        # Make sure we have data to plot
+                        if not plot_results.empty:
+                            fig, ax = plt.subplots(figsize=(12, 8))
+                            
+                            # Handle Description column safely
+                            if 'Description' in plot_results.columns:
+                                # Convert to string first to avoid the error
+                                plot_results['ShortDesc'] = plot_results['Description'].astype(str).str.slice(0, 20) + '...'
+                            else:
+                                # Fallback to SKU if Description not available
+                                plot_results['ShortDesc'] = plot_results['SKU'].astype(str)
+                            
+                            # Create the plot with explicit x and y values
+                            sns.barplot(x='ShortDesc', y='Revenue_Change_Pct', data=plot_results, ax=ax)
+                            
+                            plt.xticks(rotation=90)
+                            plt.title("Revenue Change by SKU (%)")
+                            plt.tight_layout()
+                            st.pyplot(fig)
+                        else:
+                            st.warning("No data to display in the Revenue Change visualization.")
+                except Exception as e:
+                    st.error(f"Error displaying Revenue Change by SKU: {str(e)}")
+                    st.info("Debug: Check data format and column names in optimization results")
                 
                 # Price Change Distribution
                 fig, ax = plt.subplots(figsize=(10, 6))
