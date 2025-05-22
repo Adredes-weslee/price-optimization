@@ -63,7 +63,7 @@ def load_sample_data():
             st.error(f"Error loading optimization results: {e}")
 
 st.set_page_config(
-    page_title="CS Tay Price Optimization",
+    page_title="Retail Price Optimizer",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -72,27 +72,12 @@ st.set_page_config(
 # Custom CSS to override sidebar text formatting
 st.markdown("""
     <style>
-    /* Make sidebar navigation links uppercase */
-    .css-1oe6wy4 {
-        text-transform: uppercase;
-        font-weight: 600;
-    }
-    .css-pkbazv {
-        text-transform: uppercase;
-        font-weight: 600;
-    }
-    /* Make active navigation item bold and uppercase */
-    .css-17lntkn {
-        text-transform: uppercase;
-        font-weight: 800;
-    }
-    /* Add a footer box */
-    .footer {
-        background-color: #F0F2F6;
-        padding: 10px;
-        border-radius: 5px;
-        margin-top: 20px;
-        text-align: center;
+    /* Target the sidebar navigation items */
+    section[data-testid="stSidebar"] .css-pkbazv, 
+    section[data-testid="stSidebar"] .css-17lntkn,
+    section[data-testid="stSidebar"] span.css-10trblm {
+        text-transform: uppercase !important;
+        font-weight: 600 !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -110,7 +95,7 @@ st_utils.initialize_session_state()
 # Load sample data if raw_data is not already loaded
 load_sample_data()
 
-st.title("CS Tay Price Optimization Dashboard")
+st.title("Retail Price Optimization Dashboard")
 st.markdown("---")
 
 # Home page content
