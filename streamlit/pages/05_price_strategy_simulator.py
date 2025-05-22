@@ -27,6 +27,13 @@ setup_paths()
 from src import config, revenue_optimization
 from utils import visualizations as viz 
 
+# Add this after imports, before any other Streamlit calls
+st.set_page_config(
+    page_title="Price Simulator",
+    page_icon="🔍",
+    layout="wide"
+)
+
 st.title("Price Strategy Simulator")
 
 # Check if we have the required data

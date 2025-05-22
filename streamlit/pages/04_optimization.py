@@ -10,6 +10,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src import config, revenue_optimization, utils
 
+# Add this after imports, before any other Streamlit calls
+st.set_page_config(
+    page_title="Revenue Optimization",
+    page_icon="💰",
+    layout="wide"
+)
+
 st.title("Revenue Optimization")
 
 # Check if elasticity results exist

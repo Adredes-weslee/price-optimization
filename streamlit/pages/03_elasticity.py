@@ -10,6 +10,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src import config, price_elasticity, utils
 
+# Add this after imports, before any other Streamlit calls
+st.set_page_config(
+    page_title="Price Elasticity",
+    page_icon="📉",
+    layout="wide"
+)
+
 st.title("Price Elasticity Analysis")
 
 # Check if processed data exists

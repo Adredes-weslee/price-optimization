@@ -10,6 +10,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src import config
 
+# Add this after imports, before any other Streamlit calls
+st.set_page_config(
+    page_title="About",
+    page_icon="ℹ️",
+    layout="wide"
+)
+
 st.title("About This Project")
 
 st.markdown("""

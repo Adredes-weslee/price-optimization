@@ -10,6 +10,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from src import config, customer_segmentation, utils
 
+# Add this after imports, before any other Streamlit calls
+st.set_page_config(
+    page_title="Customer Segmentation",
+    page_icon="👥",
+    layout="wide"
+)
+
 st.title("Customer Segmentation")
 
 # Check if processed data exists
