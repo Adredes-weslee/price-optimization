@@ -6,7 +6,7 @@
 [![Gurobi](https://img.shields.io/badge/gurobi-12.0.2-green.svg)](https://www.gurobi.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Live Demo**: [🚀 Price Optimization Dashboard](https://pricing-optimal.streamlit.app/)
+> **Live Demo**: [🚀 Price Optimization Dashboard](https://adredes-weslee-price-optimization-streamlitapp-yxjoe3.streamlit.app/price_strategy_simulator)
 
 An enterprise-grade analytics platform that combines customer segmentation, econometric modeling, and mathematical optimization to maximize retail revenue through data-driven pricing strategies.
 
@@ -101,7 +101,7 @@ price-optimization/
 #### Option 1: Conda Environment (Recommended)
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/price-optimization.git
+git clone https://github.com/Adredes-weslee/price-optimization.git
 cd price-optimization
 
 # Create conda environment
@@ -112,7 +112,7 @@ conda activate price-optimization
 #### Option 2: pip Installation
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/price-optimization.git
+git clone https://github.com/Adredes-weslee/price-optimization.git
 cd price-optimization
 
 # Install dependencies
@@ -345,4 +345,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**🚀 [Live Dashboard](https://pricing-optimal.streamlit.app/) | 📧 Contact: [your.email@domain.com](mailto:your.email@domain.com) | 🐙 [GitHub Repository](https://github.com/yourusername/price-optimization)**
+**🚀 [Live Dashboard](https://adredes-weslee-price-optimization-streamlitapp-yxjoe3.streamlit.app/price_strategy_simulator) | 📧 Contact: [weslee.qb@gmail.com](mailto:weslee.qb@gmail.com) | 🐙 [GitHub Repository](https://github.com/Adredes-weslee/price-optimization)**
