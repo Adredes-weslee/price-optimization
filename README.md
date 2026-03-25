@@ -4,6 +4,22 @@ Retail price-optimization pipeline that turns transaction CSVs into customer seg
 
 The code is designed for anonymized customer codes and SKU-level transactions. `Customer Name` is dropped if present, and segmentation uses `Customer Code` as the customer key.
 
+<!-- README_SURFACE_START -->
+![Python](https://img.shields.io/badge/Python-Optimization_Engine-3776AB?style=flat-square&logo=python&logoColor=white) ![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?style=flat-square&logo=streamlit&logoColor=white) ![Gurobi](https://img.shields.io/badge/Gurobi-Required-EE3524?style=flat-square)
+
+[![Portfolio Article](https://img.shields.io/badge/Portfolio%20Article-102A43?style=flat-square)](https://adredes-weslee.github.io/data-science/pricing-strategy/business-analytics/commercial-strategy/2024/08/15/customer-segmentation-price-optimization.html) [![Live Demo](https://img.shields.io/badge/Live%20Demo-FF8B2B?style=flat-square)](https://adredes-weslee-price-optimization-streamlitapp-yxjoe3.streamlit.app/)
+## Quickstart
+
+```bash
+pip install -r requirements.txt
+python -m src.main
+streamlit run streamlit/app.py
+```
+
+See [Setup and Run](#setup-and-run) for the full environment and verification path.
+
+<!-- README_SURFACE_END -->
+
 ## Why This Repository Exists
 
 - Given sales transactions with `Transaction Date`, `Sales Order No.`, `Customer Code`, `Inventory Code`, `Qty`, and `Total Base Amt`, the repo tries to answer who the customers are, how price-sensitive the top products are, and what price changes maximize revenue.
