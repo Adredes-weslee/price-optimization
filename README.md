@@ -26,6 +26,8 @@ flowchart LR
 
 ## Quickstart
 
+Run the CLI pipeline before trusting the full dashboard output. Some UI loaders still reference stale artifact names until the generated CSVs are refreshed.
+
 ```bash
 pip install -r requirements.txt
 python -m src.main
@@ -62,7 +64,7 @@ See [Setup and Run](#setup-and-run) for the full environment and verification pa
 1. Use `environment.yaml` or `requirements.txt`; the pinned stack includes Python 3.11, Streamlit 1.45.0, scikit-learn 1.6.1, statsmodels 0.14.4, and Gurobi support via `gurobipy`.
 2. Put the raw file at `data/raw/sales_data.csv`; the committed sample shows the expected transaction, customer, SKU, quantity, and revenue fields.
 3. Use module form for the CLI steps, for example `python -m src.main` and `python -m src.data_preprocessing`. The direct `python src/main.py` form fails here because `src/main.py` uses relative imports.
-4. Start the dashboard with `streamlit run streamlit/app.py`; optimization still requires a valid Gurobi license via `GRB_LICENSE_FILE`.
+4. Start the dashboard with `streamlit run streamlit/app.py`; optimization still requires a valid Gurobi license via `GRB_LICENSE_FILE`, and some dashboard loaders still expect stale filenames until the pipeline has been rerun.
 
 ## Core Workflows
 
