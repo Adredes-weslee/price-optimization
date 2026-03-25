@@ -122,13 +122,18 @@ def load_latest_results():
     
     # Try to load segmentation results
     if st.session_state.segmentation_results is None:
-        segmentation_path = config.SEGMENTATION_OUTPUT_DIR / "customer_segments.csv"
-        if segmentation_path.exists():
-            try:
-                from src import utils
-                st.session_state.segmentation_results = utils.load_csv_data(segmentation_path)
-            except Exception:
-                pass
+        segmentation_candidates = [
+            config.CUSTOMER_SEGMENTATION_OUTPUT_PATH,
+            config.SEGMENTATION_OUTPUT_DIR / "customer_segments.csv",
+        ]
+        for segmentation_path in segmentation_candidates:
+            if segmentation_path.exists():
+                try:
+                    from src import utils
+                    st.session_state.segmentation_results = utils.load_csv_data(segmentation_path)
+                    break
+                except Exception:
+                    pass
     
     # Try to load elasticity results
     if st.session_state.elasticity_results is None:
@@ -142,10 +147,15 @@ def load_latest_results():
     
     # Try to load optimization results
     if st.session_state.optimization_results is None:
-        optimization_path = config.OPTIMIZATION_OUTPUT_DIR / "optimized_prices.csv"
-        if optimization_path.exists():
-            try:
-                from src import utils
-                st.session_state.optimization_results = utils.load_csv_data(optimization_path)
-            except Exception:
-                pass
+        optimization_candidates = [
+            config.REVENUE_OPTIMIZATION_OUTPUT_PATH,
+            config.OPTIMIZATION_OUTPUT_DIR / "optimized_prices.csv",
+        ]
+        for optimization_path in optimization_candidates:
+            if optimization_path.exists():
+                try:
+                    from src import utils
+                    st.session_state.optimization_results = utils.load_csv_data(optimization_path)
+                    break
+                except Exception:
+                    pass

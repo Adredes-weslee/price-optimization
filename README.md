@@ -1,6 +1,6 @@
 # Advanced Retail Price Optimization System
 
-Retail price-optimization pipeline that turns transaction CSVs into customer segments, elasticity estimates, and optimized price recommendations, with a Streamlit dashboard on top.
+Retail price-optimization workflow that turns committed transaction CSVs into customer segments, elasticity estimates, and optimized price recommendations, with a Streamlit dashboard designed to read as a staged commercial decision flow on first render.
 
 The code is designed for anonymized customer codes and SKU-level transactions. `Customer Name` is dropped if present, and segmentation uses `Customer Code` as the customer key.
 
@@ -24,9 +24,15 @@ flowchart LR
 
 ![Python](https://img.shields.io/badge/Python-Optimization_Engine-3776AB?style=flat-square&logo=python&logoColor=white) ![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?style=flat-square&logo=streamlit&logoColor=white) ![Gurobi](https://img.shields.io/badge/Gurobi-Required-EE3524?style=flat-square)
 
+## Interface Preview
+
+The dashboard opens in demo-ready mode from committed artifacts, then guides the reader through customer segmentation, price elasticity, and revenue optimization in that order.
+
+![Interface preview](docs/screenshots/app-overview.png)
+
 ## Quickstart
 
-Run the CLI pipeline before trusting the full dashboard output. Some UI loaders still reference stale artifact names until the generated CSVs are refreshed.
+Run the CLI pipeline before trusting fresh outputs. The committed sample artifacts are enough to render the demo immediately, and the dashboard now falls back to the checked-in elasticity CSV naming when the older filename is absent.
 
 ```bash
 pip install -r requirements.txt
